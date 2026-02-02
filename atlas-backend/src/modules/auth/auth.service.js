@@ -21,10 +21,11 @@ const validateCredentials = async (email, password) => {
 
 const generateToken = (user) => {
     const payload = {
-        userId: user.id,
+        id: user.id,
         role: user.role.name,
         sellerId: user.seller ? user.seller.id : null
     };
+
 
     return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
 };

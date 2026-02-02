@@ -28,9 +28,18 @@ const createOrder = async (orderData, user) => {
     }
 
     // Identify Seller
-    const sellerId = user.role === 'ADMIN' ? (requestedSellerId || user.userId) : user.sellerId;
+    let sellerId;
+    if (user.role === 'SELLER') {
+        sellerId = user.sellerId;
+    } else if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        if (!requestedSellerId) {
+            throw new Error('Seller ID is required for Admin/Super Admin to create an order');
+        }
+        sellerId = requestedSellerId;
+    }
+
     if (!sellerId) {
-        throw new Error('Seller ID is required for order creation');
+        throw new Error('Seller ID could not be determined');
     }
 
     // 3. Prisma Transaction for Atomic Creation

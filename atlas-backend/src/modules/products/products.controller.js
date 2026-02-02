@@ -9,17 +9,17 @@ const createProduct = async (req, res) => {
             category,
             purchasePrice,
             sellingPrice,
-            price, // sometimes frontend sends price
+            price,
             stockQuantity,
-            stock, // sometimes frontend sends stock
+            stock,
             description,
             productLink,
             warehouse,
             variants,
-            status
+            status,
+            sellerId
         } = req.body;
 
-        // Basic validation
         const finalName = name || req.body.nameEn;
         const finalPrice = parseFloat(sellingPrice || price);
 
@@ -30,10 +30,8 @@ const createProduct = async (req, res) => {
             return res.status(400).json({ error: 'Selling Price is required and must be a number' });
         }
 
-        // Generate SKU if not provided
         const sku = req.body.sku || req.body.code || `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-        // Map data to Prisma model
         const productData = {
             name: finalName,
             nameAr: nameAr || null,
@@ -43,10 +41,10 @@ const createProduct = async (req, res) => {
             purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
             price: finalPrice,
             stock: parseInt(stockQuantity || stock || 0),
-            status: status || 'Active', // Default to Active as per requirement
+            status: status || 'Active',
             productLink: productLink || null,
             variants: variants || [],
-            // Ignore image as per requirement
+            sellerId: sellerId ? parseInt(sellerId) : null
         };
 
         const product = await prisma.product.create({
@@ -56,7 +54,6 @@ const createProduct = async (req, res) => {
         return res.status(201).json(product);
     } catch (error) {
         console.error('Error creating product:', error);
-        // Handle unique constraint on SKU
         if (error.code === 'P2002') {
             return res.status(400).json({ error: 'A product with this SKU already exists' });
         }
@@ -67,15 +64,37 @@ const createProduct = async (req, res) => {
 const getProducts = async (req, res) => {
     try {
         const { active } = req.query;
+        const { role, id: userId, sellerId } = req.user;
         const where = {};
 
-        // If active=true is passed (e.g. from Seller view), filter by status
+        if (role === 'SELLER') {
+            if (!sellerId) return res.json([]);
+            where.sellerId = sellerId;
+        } else if (role === 'ADMIN') {
+            // Admin sees ONLY products from sellers they manage
+            where.seller = { adminId: userId };
+
+            // Allow filtering by specific seller (e.g., in Create Order dropdown)
+            if (req.query.sellerId) {
+                where.sellerId = parseInt(req.query.sellerId);
+            }
+        }
+
         if (active === 'true') {
             where.status = 'Active';
         }
 
         const products = await prisma.product.findMany({
             where,
+            include: {
+                seller: {
+                    include: {
+                        user: {
+                            select: { name: true }
+                        }
+                    }
+                }
+            },
             orderBy: { createdAt: 'desc' }
         });
 
@@ -85,6 +104,7 @@ const getProducts = async (req, res) => {
         return res.status(500).json({ error: 'Failed to fetch products' });
     }
 };
+
 
 const updateProduct = async (req, res) => {
     try {

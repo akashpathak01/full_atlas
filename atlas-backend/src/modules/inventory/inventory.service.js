@@ -20,13 +20,16 @@ const listWarehouses = async () => {
 // --- Inventory Operations ---
 
 const getInventory = async (user) => {
-    const { role, sellerId } = user;
+    const { role, id: userId, sellerId } = user;
 
     let where = {};
     if (role === 'SELLER') {
         if (!sellerId) return [];
         where = { product: { sellerId } };
+    } else if (role === 'ADMIN') {
+        where = { product: { seller: { adminId: userId } } };
     }
+
 
     return await prisma.inventory.findMany({
         where,

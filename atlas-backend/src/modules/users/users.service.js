@@ -3,22 +3,40 @@ const prisma = require('../../utils/prisma');
 const { logAction } = require('../../utils/auditLogger');
 
 const ROLE_SCOPES = {
-    SUPER_ADMIN: [
-        'SUPER_ADMIN', 'ADMIN', 'SELLER', 'CALL_CENTER_AGENT',
-        'CALL_CENTER_MANAGER', 'STOCK_KEEPER', 'PACKAGING_AGENT', 'DELIVERY_AGENT'
-    ],
-    ADMIN: [
-        'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER', 'STOCK_KEEPER',
-        'PACKAGING_AGENT', 'DELIVERY_AGENT'
+    SUPER_ADMIN: ['ADMIN'], // Super Admin can ONLY create Admins
+    ADMIN: [ // Admin can create operational roles ONLY
+        'SELLER',
+        'CALL_CENTER_AGENT',
+        'CALL_CENTER_MANAGER',
+        'STOCK_KEEPER',
+        'PACKAGING_AGENT',
+        'DELIVERY_AGENT'
     ]
 };
+
 
 const getAllowedRoles = (requesterRole) => {
     return ROLE_SCOPES[requesterRole] || [];
 };
 
-const createUser = async (userData, requesterRole) => {
-    const { email, password, name, roleName } = userData;
+const createUser = async (userData, requester) => {
+    const requesterRole = requester.role;
+    const requesterId = requester.id;
+
+    const {
+        email,
+        password,
+        name,
+        roleName,
+        phone,
+        storeLink,
+        bankName,
+        accountHolder,
+        accountNumber,
+        ibanConfirmation,
+        idFrontImage,
+        idBackImage
+    } = userData;
 
     // 1. Role Boundary Check
     const allowedRoles = getAllowedRoles(requesterRole);
@@ -41,25 +59,55 @@ const createUser = async (userData, requesterRole) => {
             email,
             password: hashedPassword,
             name,
+            phone,
             roleId: role.id,
-            isActive: true
+            isActive: true,
+            storeLink,
+            bankName,
+            accountHolder,
+            accountNumber,
+            ibanConfirmation,
+            idFrontImage,
+            idBackImage,
+            createdById: requesterId // Track who created this user
         },
         include: { role: true }
     });
+
+    // 5. If role is SELLER, create a Seller entry and link to Admin
+    if (roleName === 'SELLER') {
+        await prisma.seller.create({
+            data: {
+                userId: user.id,
+                shopName: name, // Default to user name
+                adminId: requesterRole === 'ADMIN' ? requesterId : null // Link to admin
+            }
+        });
+    }
 
     const { password: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
 };
 
-const listUsers = async (requesterRole) => {
+
+const listUsers = async (requester) => {
+    const requesterRole = requester.role;
+    const requesterId = requester.id;
     const allowedRoles = getAllowedRoles(requesterRole);
 
+    let where = {
+        role: {
+            name: { in: allowedRoles }
+        }
+    };
+
+    // Admin only sees users they created
+    if (requesterRole === 'ADMIN') {
+        where.createdById = requesterId;
+    }
+
     return await prisma.user.findMany({
-        where: {
-            role: {
-                name: { in: allowedRoles }
-            }
-        },
+        where,
         select: {
             id: true,
             email: true,
@@ -73,6 +121,7 @@ const listUsers = async (requesterRole) => {
         orderBy: { createdAt: 'desc' }
     });
 };
+
 
 const updateUserStatus = async (userId, isActive, requesterRole, adminUserId) => { // Added adminUserId for logging
     const userToUpdate = await prisma.user.findUnique({

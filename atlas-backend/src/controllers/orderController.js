@@ -19,15 +19,29 @@ const getOrders = async (req, res) => {
             }
             if (!sellerId) return res.json([]);
             where.sellerId = sellerId;
-        } else if (role === 'CALL_CENTER_AGENT') {
-            // If Agent specifies a status, they can only see PENDING_REVIEW anyway or we override it
-            // According to requirements, they see PENDING_REVIEW.
+        } else if (role === 'CALL_CENTER_AGENT' || role === 'CALL_CENTER_MANAGER') {
             where.status = 'PENDING_REVIEW';
-        } else if (role === 'CALL_CENTER_MANAGER' || role === 'ADMIN' || role === 'SUPER_ADMIN') {
-            // Can see all orders, filters already applied from req.query above
+        } else if (role === 'PACKAGING_AGENT') {
+            // See only CONFIRMED orders that need packaging
+            where.status = 'CONFIRMED';
+        } else if (role === 'DELIVERY_AGENT') {
+            // See only PACKED orders that need delivery
+            where.status = 'PACKED';
+        } else if (role === 'STOCK_KEEPER') {
+            // Stock keepers see everything for inventory purposes
+            where = {};
+        } else if (role === 'ADMIN') {
+            // Admin sees ONLY orders where order.seller.adminId === logged-in admin id
+            where.seller = {
+                adminId: userId
+            };
+        } else if (role === 'SUPER_ADMIN') {
+            // Full access, no additional filtering
         } else {
+
             return res.status(403).json({ message: 'Unauthorized access' });
         }
+
 
         const orders = await prisma.order.findMany({
             where,
@@ -77,8 +91,17 @@ const getOrderById = async (req, res) => {
             if (order.sellerId !== sellerId) {
                 return res.status(403).json({ message: 'Unauthorized access to this order' });
             }
+        } else if (role === 'ADMIN') {
+            // Fetch seller details to check adminId
+            const seller = await prisma.seller.findUnique({
+                where: { id: order.sellerId }
+            });
+            if (seller?.adminId !== userId) {
+                return res.status(403).json({ message: 'Unauthorized access: This order belongs to another tenant' });
+            }
         }
-        // Call center roles and admins can see any order
+        // Call center roles and super admins can see any order (within their scope if defined)
+
 
         res.json(order);
     } catch (error) {
@@ -171,13 +194,13 @@ const createOrder = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
     const { id: orderId } = req.params;
-    const { status } = req.body;
+    const { status: nextStatus } = req.body;
     const { role } = req.user;
 
     // 1. Strict status validation
-    const allowedStatuses = ['CONFIRMED', 'CANCELLED'];
-    if (!allowedStatuses.includes(status)) {
-        return res.status(400).json({ message: 'Invalid status. Only CONFIRMED or CANCELLED allowed.' });
+    const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'PACKED'];
+    if (!allowedStatuses.includes(nextStatus)) {
+        return res.status(400).json({ message: 'Invalid status requested.' });
     }
 
     try {
@@ -185,27 +208,54 @@ const updateOrderStatus = async (req, res) => {
 
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
-        // 2. Role & Transition Rules
+        // 2. Role & Transition Logic
         if (role === 'CALL_CENTER_AGENT' || role === 'CALL_CENTER_MANAGER') {
             if (order.status !== 'PENDING_REVIEW') {
-                return res.status(400).json({ message: 'Only orders in PENDING_REVIEW status can be updated.' });
+                return res.status(400).json({ message: 'Call Center can only process PENDING_REVIEW orders.' });
             }
-        } else if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ message: 'Unauthorized to update order status' });
+            if (!['CONFIRMED', 'CANCELLED'].includes(nextStatus)) {
+                return res.status(400).json({ message: 'Call Center can only CONFIRM or CANCEL.' });
+            }
+        } else if (role === 'PACKAGING_AGENT') {
+            if (order.status !== 'CONFIRMED') {
+                return res.status(400).json({ message: 'Packaging can only process CONFIRMED orders.' });
+            }
+            if (nextStatus !== 'PACKED') {
+                return res.status(400).json({ message: 'Packaging can only set status to PACKED.' });
+            }
+        } else {
+            return res.status(403).json({ message: 'Unauthorized. Role not allowed for this status update.' });
         }
 
         const updatedOrder = await prisma.order.update({
             where: { id: parseInt(orderId) },
-            data: { status }
+            data: { status: nextStatus }
         });
 
-        res.json({
-            message: `Order status updated to ${status}`,
-            order: updatedOrder
-        });
+        res.json(updatedOrder);
     } catch (error) {
         res.status(500).json({ message: 'Update failed', error: error.message });
     }
 };
 
-module.exports = { getOrders, getOrderById, createOrder, updateOrderStatus };
+const getPackagingOrders = async (req, res) => {
+    const { role } = req.user;
+
+    if (role !== 'PACKAGING_AGENT') {
+        return res.status(403).json({ message: 'Unauthorized. Only Packaging Agents can access this endpoint.' });
+    }
+
+    try {
+        const orders = await prisma.order.findMany({
+            where: { status: 'CONFIRMED' },
+            orderBy: { createdAt: 'asc' },
+            include: { items: true }
+        });
+
+        res.json({ orders });
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching packaging orders', error: error.message });
+    }
+};
+
+module.exports = { getOrders, getOrderById, createOrder, updateOrderStatus, getPackagingOrders };

@@ -28,7 +28,8 @@ const completeTask = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const task = await packagingService.completeTask(id, req.user.userId, req.user);
+        const task = await packagingService.completeTask(id, req.user.id, req.user);
+
         res.json(task);
     } catch (error) {
         const status = error.message.includes('Forbidden') ? 403 :

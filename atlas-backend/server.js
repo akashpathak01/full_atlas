@@ -18,6 +18,10 @@ const callCenterRoutes = require('./src/modules/call-center/callCenter.routes');
 const auditLogsRoutes = require('./src/modules/audit-logs/auditLogs.routes');
 const financeRoutes = require('./src/modules/finance/finance.routes');
 const productsRoutes = require('./src/modules/products/products.routes');
+const rolesRoutes = require('./src/modules/roles/roles.routes');
+const sellersRoutes = require('./src/modules/sellers/sellers.routes');
+const configRoutes = require('./src/modules/config/config.routes');
+const statsRoutes = require('./src/modules/stats/stats.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -29,6 +33,12 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/call-center', callCenterRoutes);
 app.use('/api/audit-logs', auditLogsRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/roles', rolesRoutes);
+app.use('/api/sellers', sellersRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/stats', statsRoutes);
+
+
 
 // Basic health check
 app.get('/health', (req, res) => {

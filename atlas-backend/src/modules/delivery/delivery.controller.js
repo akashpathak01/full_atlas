@@ -28,7 +28,7 @@ const startDelivery = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const task = await deliveryService.startDelivery(id, req.user.userId);
+        const task = await deliveryService.startDelivery(id, req.user.id);
         res.json(task);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -40,9 +40,10 @@ const completeDelivery = async (req, res) => {
     const { receiverName, notes } = req.body;
 
     try {
-        const task = await deliveryService.completeDelivery(id, req.user.userId, { receiverName, notes }, req.user);
+        const task = await deliveryService.completeDelivery(id, req.user.id, { receiverName, notes }, req.user);
         res.json(task);
     } catch (error) {
+
         const status = error.message.includes('Forbidden') ? 403 :
             error.message.includes('not found') ? 404 : 400;
         res.status(status).json({ message: error.message });

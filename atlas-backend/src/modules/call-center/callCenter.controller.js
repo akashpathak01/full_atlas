@@ -44,8 +44,9 @@ const addNote = async (req, res) => {
     if (!content) return res.status(400).json({ message: 'Note content is required' });
 
     try {
-        const note = await callCenterService.addCallNote(req.params.id, req.user.userId, content);
+        const note = await callCenterService.addCallNote(req.params.id, req.user.id, content);
         res.status(201).json(note);
+
     } catch (error) {
         res.status(400).json({ message: error.message });
     }

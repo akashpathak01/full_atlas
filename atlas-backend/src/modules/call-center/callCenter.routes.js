@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const callCenterController = require('./callCenter.controller');
-const requireAuth = require('../../middlewares/auth.middleware');
-const requireRole = require('../../middlewares/role.middleware');
+const { verifyToken, authorizeRoles } = require('../../middleware/auth');
 
 // Customer Routes
-router.get('/customers', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER']), callCenterController.getCustomers);
-router.get('/customers/:id', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER']), callCenterController.getCustomerById);
+router.get('/customers', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'), callCenterController.getCustomers);
+router.get('/customers/:id', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'), callCenterController.getCustomerById);
 
 // Order Routes
-router.get('/orders', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER']), callCenterController.getOrders);
-router.patch('/orders/:id/status', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT']), callCenterController.updateStatus);
+router.get('/orders', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'), callCenterController.getOrders);
+router.patch('/orders/:id/status', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT'), callCenterController.updateStatus);
 
 // Notes Routes
-router.post('/orders/:id/notes', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT']), callCenterController.addNote);
-router.get('/orders/:id/notes', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER']), callCenterController.getNotes);
+router.post('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT'), callCenterController.addNote);
+router.get('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'), callCenterController.getNotes);
 
 // Manager Routes
-router.get('/agents', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER']), callCenterController.getAgents);
-router.get('/performance', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER']), callCenterController.getPerformance);
+router.get('/agents', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getAgents);
+router.get('/performance', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getPerformance);
+
 
 module.exports = router;

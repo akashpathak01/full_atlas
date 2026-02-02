@@ -17,14 +17,29 @@ const verifyToken = (req, res, next) => {
 };
 
 const authorizeRoles = (...allowedRoles) => {
+    const roles = allowedRoles.flat();
     return (req, res, next) => {
-        if (!req.user || !allowedRoles.includes(req.user.role)) {
+        const userRole = typeof req.user?.role === 'object' ? req.user.role.name : req.user?.role;
+
+        console.log(`[auth] User Role: ${userRole}, Allowed Roles: ${roles.join(', ')}`);
+
+        if (!req.user || !roles.includes(userRole)) {
+            console.log(`[auth] Access DENIED for role: ${userRole}`);
             return res.status(403).json({
-                message: 'Forbidden: You do not have permission to access this resource'
+                message: 'Forbidden: You do not have permission to access this resource',
+                debug: {
+                    userRole: userRole,
+                    allowed: roles
+                }
             });
         }
+
+        console.log(`[auth] Access GRANTED for role: ${userRole}`);
         next();
     };
 };
+
+
+
 
 module.exports = { verifyToken, authorizeRoles };

@@ -2,7 +2,8 @@ const userService = require('./users.service');
 
 const createUser = async (req, res) => {
     try {
-        const user = await userService.createUser(req.body, req.user.role);
+        const user = await userService.createUser(req.body, req.user);
+
         res.status(201).json(user);
     } catch (error) {
         const status = error.message.includes('Forbidden') ? 403 : 400;
@@ -12,7 +13,7 @@ const createUser = async (req, res) => {
 
 const listUsers = async (req, res) => {
     try {
-        const users = await userService.listUsers(req.user.role);
+        const users = await userService.listUsers(req.user);
         res.json(users);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -28,7 +29,7 @@ const updateStatus = async (req, res) => {
     }
 
     try {
-        const user = await userService.updateUserStatus(id, isActive, req.user.role);
+        const user = await userService.updateUserStatus(id, isActive, req.user.role, req.user.id);
         res.json(user);
     } catch (error) {
         const status = error.message.includes('Forbidden') ? 403 :

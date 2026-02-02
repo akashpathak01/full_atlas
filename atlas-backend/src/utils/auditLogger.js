@@ -13,7 +13,7 @@ const prisma = require('./prisma');
  */
 const logAction = async ({ actionType, entityType, entityId, user, metadata = {} }) => {
     try {
-        if (!user || !user.userId) {
+        if (!user || !user.id) {
             console.warn('AuditLog skipped: No user provided');
             return;
         }
@@ -23,7 +23,8 @@ const logAction = async ({ actionType, entityType, entityId, user, metadata = {}
                 actionType,
                 entityType,
                 entityId: entityId ? parseInt(entityId) : null,
-                performedBy: user.userId,
+                performedBy: user.id,
+
                 performedByRole: user.role,
                 metadata
             }

@@ -8,20 +8,30 @@ datasource db {
 }
 
 model User {
-  id             Int             @id @default(autoincrement())
-  email          String          @unique
-  password       String
-  name           String
-  roleId         Int
-  role           Role            @relation(fields: [roleId], references: [id])
-  seller         Seller?
-  isActive       Boolean         @default(true)
-  packagingTasks PackagingTask[]
-  deliveryTasks  DeliveryTask[]
-  callNotes      CallNote[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               Int             @id @default(autoincrement())
+  email            String          @unique
+  password         String
+  name             String
+  phone            String?
+  roleId           Int
+  role             Role            @relation(fields: [roleId], references: [id])
+  seller           Seller?
+  isActive         Boolean         @default(true)
+  storeLink        String?
+  bankName         String?
+  accountHolder    String?
+  accountNumber    String?
+  ibanConfirmation String?
+  idFrontImage     String?
+  idBackImage      String?
+  createdById      Int? // The Admin who created this staff account
+  packagingTasks   PackagingTask[]
+  deliveryTasks    DeliveryTask[]
+  callNotes        CallNote[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 }
+
 
 model Role {
   id    Int    @id @default(autoincrement())
@@ -34,11 +44,13 @@ model Seller {
   shopName  String?
   userId    Int       @unique
   user      User      @relation(fields: [userId], references: [id])
+  adminId   Int? // The Admin who created/manages this seller
   orders    Order[]
   products  Product[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
+
 
 model Product {
   id            Int         @id @default(autoincrement())
@@ -180,3 +192,11 @@ model AuditLog {
   metadata        Json?
   createdAt       DateTime @default(now())
 }
+
+model SystemConfiguration {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
