@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             Int             @id @default(autoincrement())
+  email          String          @unique
+  password       String
+  name           String
+  roleId         Int
+  role           Role            @relation(fields: [roleId], references: [id])
+  seller         Seller?
+  isActive       Boolean         @default(true)
+  packagingTasks PackagingTask[]
+  deliveryTasks  DeliveryTask[]
+  callNotes      CallNote[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model Role {
+  id    Int    @id @default(autoincrement())
+  name  String @unique // One of: SUPER_ADMIN, ADMIN, SELLER, CALL_CENTER_AGENT, CALL_CENTER_MANAGER, STOCK_KEEPER, PACKAGING_AGENT, DELIVERY_AGENT
+  users User[]
+}
+
+model Seller {
+  id        Int       @id @default(autoincrement())
+  shopName  String?
+  userId    Int       @unique
+  user      User      @relation(fields: [userId], references: [id])
+  orders    Order[]
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id            Int         @id @default(autoincrement())
+  name          String
+  nameAr        String?
+  sku           String      @unique
+  category      String?
+  description   String?     @db.Text
+  purchasePrice Float?
+  price         Float
+  stock         Int         @default(0)
+  status        String      @default("ACTIVE")
+  productLink   String?
+  image         String?
+  variants      Json?
+  sellerId      Int?
+  seller        Seller?     @relation(fields: [sellerId], references: [id])
+  inventory     Inventory[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Warehouse {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  location  String?
+  inventory Inventory[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model Inventory {
+  id          Int             @id @default(autoincrement())
+  productId   Int
+  product     Product         @relation(fields: [productId], references: [id])
+  warehouseId Int
+  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id])
+  quantity    Int             @default(0)
+  movements   StockMovement[]
+
+  @@unique([productId, warehouseId])
+}
+
+model StockMovement {
+  id          Int       @id @default(autoincrement())
+  inventoryId Int
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  quantity    Int // Positive for IN, Negative for OUT
+  type        String // IN, OUT, ADJUSTMENT
+  reason      String?
+  createdAt   DateTime  @default(now())
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String   @unique
+  email     String?
+  address   String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id              Int            @id @default(autoincrement())
+  orderNumber     String         @unique
+  customerName    String?
+  customerPhone   String?
+  orderDate       String?
+  status          String         @default("CREATED")
+  totalAmount     Float?
+  shippingAddress String?        @db.Text
+  customerNotes   String?        @db.Text
+  internalNotes   String?        @db.Text
+  sellerId        Int
+  seller          Seller         @relation(fields: [sellerId], references: [id])
+  customerId      Int?
+  customer        Customer?      @relation(fields: [customerId], references: [id])
+  items           OrderItem[]
+  packagingTask   PackagingTask?
+  deliveryTask    DeliveryTask?
+  callNotes       CallNote[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId Int?
+  variant   String?
+  product   String?
+  quantity  Int
+  price     Float
+}
+
+model PackagingTask {
+  id          Int       @id @default(autoincrement())
+  orderId     Int       @unique
+  order       Order     @relation(fields: [orderId], references: [id])
+  agentId     Int
+  agent       User      @relation(fields: [agentId], references: [id])
+  assignedAt  DateTime  @default(now())
+  completedAt DateTime?
+}
+
+model DeliveryTask {
+  id           Int       @id @default(autoincrement())
+  orderId      Int       @unique
+  order        Order     @relation(fields: [orderId], references: [id])
+  agentId      Int
+  agent        User      @relation(fields: [agentId], references: [id])
+  assignedAt   DateTime  @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  receiverName String?
+  notes        String?
+}
+
+model CallNote {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id])
+  agentId   Int
+  agent     User     @relation(fields: [agentId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id              Int      @id @default(autoincrement())
+  actionType      String
+  entityType      String
+  entityId        Int?
+  performedBy     Int
+  performedByRole String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+}

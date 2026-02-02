@@ -1,0 +1,50 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# General cache folders
+*cache*/
+/media
+*.sqlite3
+node_modules/
+test-results/
+playwright-report/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+ENV/
+.Python
+
+# Django
+*.log
+db.sqlite3-journal
+/staticfiles
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.benchmarks/
+nixpacks.toml
+Procfile

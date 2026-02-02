@@ -1,0 +1,410 @@
+
+import React, { useState } from 'react';
+import { stockInventoryData } from '../../data/stockDummyData';
+import { Home, Package, Search, Plus, FileText, Calendar, Filter, Image as ImageIcon, X, ChevronDown, Check } from 'lucide-react';
+
+export function StockInventoryPage() {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeFilter, setActiveFilter] = useState('All');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // Modal States
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+    // Data States
+    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [activePeriod, setActivePeriod] = useState(null);
+
+    // Add Inventory Form State - Updated to match screenshot
+    const [newProduct, setNewProduct] = useState({
+        product: '',
+        warehouse: '',
+        quantity: '',
+        cartons: '0',
+        location: '',
+        status: 'Available',
+        expiryDate: '',
+        sourcingRef: ''
+    });
+
+    // Report Form State
+    const [reportType, setReportType] = useState('inventory');
+
+    // Filter Logic
+    const filteredProducts = stockInventoryData.products.filter(product => {
+        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFilter = activeFilter === 'All' || product.category.toLowerCase() === activeFilter.toLowerCase();
+
+        return matchesSearch && matchesFilter;
+    });
+
+    // Handlers
+    const handleAddProduct = (e) => {
+        e.preventDefault();
+        alert('Product Added Successfully! (Simulation)');
+        setIsAddModalOpen(false);
+        setNewProduct({
+            product: '',
+            warehouse: '',
+            quantity: '',
+            cartons: '0',
+            location: '',
+            status: 'Available',
+            expiryDate: '',
+            sourcingRef: ''
+        });
+    };
+
+    const handleApplyPeriod = (e) => {
+        e.preventDefault();
+        if (dateRange.start && dateRange.end) {
+            setActivePeriod(`${dateRange.start} - ${dateRange.end}`);
+            setIsPeriodModalOpen(false);
+        }
+    };
+
+    const handleGenerateReport = () => {
+        alert(`Generating ${reportType.toUpperCase()} report... Download started.`);
+        setIsReportModalOpen(false);
+    };
+
+    const clearPeriod = () => {
+        setActivePeriod(null);
+        setDateRange({ start: '', end: '' });
+    };
+
+    return (
+        <div className="space-y-6 relative">
+            {/* Breadcrumb */}
+            <div className="flex items-center text-sm text-gray-500">
+                <Home className="w-4 h-4 mr-2" />
+                <span className="mr-2">Home</span>
+                <span className="mx-2">&gt;</span>
+                <span className="mr-2">Stock</span>
+                <span className="mx-2">&gt;</span>
+                <span className="font-medium text-gray-900">Product Acceptance</span>
+            </div>
+
+            {/* Header */}
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-6">Inventory Management</h1>
+
+                {/* Controls Bar */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                    <div className="flex-1 flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Search product name or SKU..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-gray-700"
+                        />
+                        <button className="bg-white border border-gray-200 p-2 rounded-lg hover:bg-gray-50 text-gray-500">
+                            <Search className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            onClick={() => setIsAddModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center text-sm font-bold shadow-sm transition-all active:scale-95"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            + Add Inventory
+                        </button>
+
+                        <button
+                            onClick={() => setIsReportModalOpen(true)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center text-sm font-bold shadow-sm transition-all active:scale-95"
+                        >
+                            <FileText className="w-4 h-4 mr-2" />
+                            Stock Report
+                        </button>
+
+                        <button
+                            onClick={() => setIsPeriodModalOpen(true)}
+                            className={`border px-4 py-2 rounded-lg flex items-center text-sm font-medium transition-all active:scale-95 ${activePeriod ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                        >
+                            <Calendar className="w-4 h-4 mr-2" />
+                            {activePeriod ? activePeriod : 'Select Period'}
+                            {activePeriod && <X className="w-3 h-3 ml-2 hover:bg-blue-200 rounded-full p-0.5" onClick={(e) => { e.stopPropagation(); clearPeriod(); }} />}
+                        </button>
+
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                                className={`bg-white border ${activeFilter !== 'All' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-gray-200 text-gray-700'} px-4 py-2 rounded-lg flex items-center text-sm font-medium hover:bg-gray-50 transition-all active:scale-95`}
+                            >
+                                <Filter className="w-4 h-4 mr-2" />
+                                {activeFilter === 'All' ? 'Filter' : activeFilter}
+                                <ChevronDown className={`w-3 h-3 ml-2 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isFilterOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-10 animate-in fade-in zoom-in-95 duration-100">
+                                    {['All', 'Electronics', 'Fashion', 'Home', 'Beauty'].map((filter) => (
+                                        <button
+                                            key={filter}
+                                            onClick={() => {
+                                                setActiveFilter(filter);
+                                                setIsFilterOpen(false);
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${activeFilter === filter ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-700'}`}
+                                        >
+                                            {filter}
+                                            {activeFilter === filter && <Check className="w-3.5 h-3.5" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Inventory Table */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden min-h-[400px]">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-500 uppercase bg-yellow-100/50 border-b border-gray-100">
+                                <tr>
+                                    <th className="p-4 w-4">
+                                        <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                    </th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">IMAGE</th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">ID</th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">PRODUCT NAME</th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">SKU</th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">SELLER</th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">CATEGORY</th>
+                                    <th className="px-6 py-4 font-bold text-gray-600">QTY</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredProducts.length > 0 ? (
+                                    filteredProducts.map((product, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                            <td className="p-4">
+                                                <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                                                    <ImageIcon className="w-5 h-5 text-gray-400" />
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-medium text-gray-900">{product.id}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900">{product.name}</td>
+                                            <td className="px-6 py-4 text-gray-500 font-mono text-xs">{product.sku}</td>
+                                            <td className="px-6 py-4 text-gray-600">{product.seller}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs capitalize">{product.category}</span>
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-gray-900">{product.qty}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
+                                            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                            <p className="font-medium">No products found</p>
+                                            <p className="text-xs mt-1">Try adjusting your search or filters</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* Add Inventory Modal - MATCHING SCREENSHOT */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-4  flex justify-between items-center bg-white">
+                            <h3 className="text-xl font-bold text-gray-900">Add Inventory</h3>
+                            <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-all"><X className="w-5 h-5" /></button>
+                        </div>
+
+                        <form onSubmit={handleAddProduct} className="px-6 pb-6 space-y-4">
+                            {/* Product Select */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Product</label>
+                                <select
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                    value={newProduct.product}
+                                    onChange={(e) => setNewProduct({ ...newProduct, product: e.target.value })}
+                                >
+                                    <option value="" disabled hidden>Select Product</option>
+                                    <option value="p1">Wireless Headphones</option>
+                                    <option value="p2">Smart Watch</option>
+                                </select>
+                            </div>
+
+                            {/* Warehouse Select */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Warehouse</label>
+                                <select
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                    value={newProduct.warehouse}
+                                    onChange={(e) => setNewProduct({ ...newProduct, warehouse: e.target.value })}
+                                >
+                                    <option value="" disabled hidden>Select Warehouse</option>
+                                    <option value="main">Main Warehouse</option>
+                                    <option value="secondary">Secondary Warehouse</option>
+                                </select>
+                            </div>
+
+                            {/* Quantity and Cartons Row */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Quantity</label>
+                                    <input
+                                        type="text"
+                                        value={newProduct.quantity}
+                                        onChange={(e) => setNewProduct({ ...newProduct, quantity: e.target.value })}
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Cartons</label>
+                                    <input
+                                        type="text"
+                                        value={newProduct.cartons}
+                                        onChange={(e) => setNewProduct({ ...newProduct, cartons: e.target.value })}
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Location */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Location</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g., Aisle A, Shelf 3"
+                                    value={newProduct.location}
+                                    onChange={(e) => setNewProduct({ ...newProduct, location: e.target.value })}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm placeholder-gray-400"
+                                />
+                            </div>
+
+                            {/* Status */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Status</label>
+                                <select
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                    value={newProduct.status}
+                                    onChange={(e) => setNewProduct({ ...newProduct, status: e.target.value })}
+                                >
+                                    <option value="Available">Available</option>
+                                    <option value="Damaged">Damaged</option>
+                                    <option value="Reserved">Reserved</option>
+                                </select>
+                            </div>
+
+                            {/* Expiry Date */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Expiry Date</label>
+                                <input
+                                    type="date"
+                                    value={newProduct.expiryDate}
+                                    onChange={(e) => setNewProduct({ ...newProduct, expiryDate: e.target.value })}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                    placeholder="dd-mm-yyyy"
+                                />
+                            </div>
+
+                            {/* Sourcing Reference */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Sourcing Reference</label>
+                                <input
+                                    type="text"
+                                    placeholder="PO number or supplier reference"
+                                    value={newProduct.sourcingRef}
+                                    onChange={(e) => setNewProduct({ ...newProduct, sourcingRef: e.target.value })}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm placeholder-gray-400"
+                                />
+                            </div>
+
+                            {/* Footer Buttons */}
+                            <div className="pt-4 flex items-center justify-between gap-3">
+                                <button
+                                    type="submit"
+                                    className="flex-grow bg-[#2563eb] hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-colors text-sm"
+                                >
+                                    Add to Inventory
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddModalOpen(false)}
+                                    className="flex-shrink-0 bg-[#e5e7eb] hover:bg-gray-300 text-gray-700 font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Select Period Modal - Preserved */}
+            {isPeriodModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><Calendar className="w-5 h-5 mr-2 text-blue-600" /> Select Period</h3>
+                            <button onClick={() => setIsPeriodModalOpen(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 transition-all"><X className="w-5 h-5" /></button>
+                        </div>
+                        <form onSubmit={handleApplyPeriod} className="p-6 space-y-4">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 pl-1">Start Date</label>
+                                    <input type="date" required value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 pl-1">End Date</label>
+                                    <input type="date" required value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" />
+                                </div>
+                            </div>
+                            <div className="pt-2 flex gap-3">
+                                <button type="button" onClick={() => setIsPeriodModalOpen(false)} className="flex-1 px-4 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200">Cancel</button>
+                                <button type="submit" className="flex-1 px-4 py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md">Apply Period</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Stock Report Modal - Preserved */}
+            {isReportModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><FileText className="w-5 h-5 mr-2 text-red-600" /> Generate Report</h3>
+                            <button onClick={() => setIsReportModalOpen(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 transition-all"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <p className="text-sm text-gray-600">Select the type of report you want to generate. The file will be downloaded in PDF format.</p>
+
+                            <div className="space-y-3">
+                                {['Inventory Summary', 'Low Stock Report', 'Stock Movement'].map((type) => (
+                                    <label key={type} className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${reportType === type ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                        <input type="radio" name="reportType" className="text-red-600 focus:ring-red-500" checked={reportType === type} onChange={() => setReportType(type)} />
+                                        <span className={`ml-3 text-sm font-medium ${reportType === type ? 'text-red-700' : 'text-gray-700'}`}>{type}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="pt-2 flex gap-3">
+                                <button onClick={() => setIsReportModalOpen(false)} className="flex-1 px-4 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200">Cancel</button>
+                                <button onClick={handleGenerateReport} className="flex-1 px-4 py-3 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 shadow-md">Download</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
