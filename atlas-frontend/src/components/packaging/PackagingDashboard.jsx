@@ -5,31 +5,31 @@ import api from '../../lib/api';
 
 export function PackagingDashboard() {
     const navigate = useNavigate();
-    const [orders, setOrders] = useState([]);
+    const [dashboardData, setDashboardData] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const fetchOrders = async () => {
+    const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/orders/packaging');
-            setOrders(response.data.orders);
+            const response = await api.get('/packaging/dashboard');
+            setDashboardData(response.data);
         } catch (error) {
-            console.error('Failed to fetch dashboard orders:', error);
+            console.error('Failed to fetch dashboard data:', error);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchOrders();
+        fetchDashboardData();
     }, []);
 
     // Stats matching the screenshot values (dynamic)
     const stats = [
-        { label: 'Pending Packaging', value: orders.length.toString(), icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50' },
-        { label: 'In Progress', value: '0', icon: LayoutGrid, color: 'text-yellow-600', bg: 'bg-yellow-50' },
-        { label: 'Completed Today', value: '0', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
-        { label: 'Total Records', value: orders.length.toString(), icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
+        { label: 'Pending Packaging', value: dashboardData?.stats?.pending.toString() || '0', icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { label: 'In Progress', value: dashboardData?.stats?.inProgress.toString() || '0', icon: LayoutGrid, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+        { label: 'Completed Today', value: dashboardData?.stats?.completedToday.toString() || '0', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
+        { label: 'Total Records', value: dashboardData?.stats?.total.toString() || '0', icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
     ];
 
     return (
@@ -165,12 +165,37 @@ export function PackagingDashboard() {
                     <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                         <h2 className="text-lg font-bold text-gray-900">Recent Packaging</h2>
                     </div>
-                    <div className="h-48 flex items-center justify-center text-gray-400 text-sm italic">
-                        No recent packaging records
+                    <div className="flex-1 overflow-y-auto min-h-[192px]">
+                        {loading ? (
+                            <div className="h-48 flex items-center justify-center">
+                                <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
+                            </div>
+                        ) : dashboardData?.recentPackaging?.length > 0 ? (
+                            <div className="divide-y divide-gray-50">
+                                {dashboardData.recentPackaging.map((task) => (
+                                    <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold text-sm text-gray-900">{task.customerName || 'Unknown Customer'}</p>
+                                            <p className="text-xs text-gray-500">{task.orderNumber}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-[10px] font-bold uppercase tracking-wider">
+                                                Completed
+                                            </span>
+                                            <p className="text-[10px] text-gray-400 mt-1">{new Date(task.completedAt).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="h-48 flex items-center justify-center text-gray-400 text-sm italic">
+                                No recent packaging records
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Recent Orders */}
+                {/* Recent Orders (Confirmed) - Ready for Packaging */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                         <h2 className="text-lg font-bold text-gray-900">Recent Orders (Confirmed)</h2>
@@ -178,22 +203,22 @@ export function PackagingDashboard() {
                             View All <ArrowRight className="w-3 h-3" />
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto min-h-[192px]">
                         {loading ? (
                             <div className="h-48 flex items-center justify-center">
                                 <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
                             </div>
-                        ) : orders.length > 0 ? (
+                        ) : dashboardData?.confirmedOrders?.length > 0 ? (
                             <div className="divide-y divide-gray-50">
-                                {orders.slice(0, 5).map((order) => (
+                                {dashboardData.confirmedOrders.map((order) => (
                                     <div
                                         key={order.id}
                                         onClick={() => navigate(`/packaging/orders/${order.id}`)}
                                         className="p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center transition-colors"
                                     >
                                         <div>
-                                            <p className="font-bold text-sm text-gray-900">{order.orderNumber || order.id}</p>
-                                            <p className="text-xs text-gray-500">{order.customerName}</p>
+                                            <p className="font-bold text-sm text-gray-900">{order.customerName}</p>
+                                            <p className="text-xs text-gray-500">{order.orderNumber || order.id}</p>
                                         </div>
                                         <div className="text-right">
                                             <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-wider">

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createProduct, getAllProducts, getActiveProducts } = require('../controllers/productController');
+const { createProduct, getAllProducts, getActiveProducts } = require('../modules/products/products.controller');
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
 
 // Admin only: Create and view all products

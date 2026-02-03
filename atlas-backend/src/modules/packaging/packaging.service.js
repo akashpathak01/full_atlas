@@ -88,8 +88,88 @@ const completeTask = async (taskId, agentId, user) => {
     return updatedTask;
 };
 
+const getDashboardStats = async (user) => {
+    // 1. Pending Packaging (Orders Confirmed but not yet assigned/in packaging)
+    const pendingCount = await prisma.order.count({
+        where: {
+            status: 'CONFIRMED'
+        }
+    });
+
+    // 2. In Progress (Orders currently being packed)
+    const inProgressCount = await prisma.order.count({
+        where: {
+            status: 'IN_PACKAGING'
+        }
+    });
+
+    // 3. Completed Today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const completedTodayCount = await prisma.packagingTask.count({
+        where: {
+            completedAt: {
+                gte: startOfDay
+            }
+        }
+    });
+
+    // 4. Total Records (All completed packaging tasks)
+    const totalRecords = await prisma.packagingTask.count();
+
+    // 5. Recent Packaging Tasks
+    const recentPackaging = await prisma.packagingTask.findMany({
+        take: 5,
+        orderBy: { completedAt: 'desc' },
+        include: {
+            order: {
+                select: {
+                    orderNumber: true,
+                    customerName: true
+                }
+            },
+            agent: {
+                select: { name: true }
+            }
+        }
+    });
+
+    // 6. Confirmed Orders (Ready for packaging)
+    const confirmedOrders = await prisma.order.findMany({
+        where: { status: 'CONFIRMED' },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+            id: true,
+            orderNumber: true,
+            customerName: true,
+            status: true,
+            createdAt: true
+        }
+    });
+
+    return {
+        stats: {
+            pending: pendingCount,
+            inProgress: inProgressCount,
+            completedToday: completedTodayCount,
+            total: totalRecords
+        },
+        recentPackaging: recentPackaging.map(task => ({
+            id: task.id,
+            orderNumber: task.order?.orderNumber,
+            customerName: task.order?.customerName,
+            agentName: task.agent?.name,
+            completedAt: task.completedAt || task.updatedAt
+        })),
+        confirmedOrders
+    };
+};
+
 module.exports = {
     assignOrder,
     listTasks,
-    completeTask
+    completeTask,
+    getDashboardStats
 };

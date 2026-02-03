@@ -5,6 +5,7 @@ const getAdminStats = async (req, res) => {
         const stats = await statsService.getAdminStats();
         res.json(stats);
     } catch (error) {
+        console.error("Error in getAdminStats:", error);
         res.status(500).json({ message: 'Error fetching stats', error: error.message });
     }
 };

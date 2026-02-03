@@ -8,6 +8,7 @@ export function PackagingOrders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState('ALL');
 
     const fetchOrders = async () => {
         try {
@@ -35,10 +36,14 @@ export function PackagingOrders() {
         fetchOrders();
     }, []);
 
-    const filteredOrders = orders.filter(order =>
-        order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredOrders = orders.filter(order => {
+        const matchesSearch = order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.customerName?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesStatus = filterStatus === 'ALL' || order.status === filterStatus;
+
+        return matchesSearch && matchesStatus;
+    });
 
     return (
         <div className="space-y-6">
@@ -107,9 +112,16 @@ export function PackagingOrders() {
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Status</label>
                                 <select className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500">
                                     <option>All Statuses</option>
-                                    <option>Pending</option>
-                                    <option>In Progress</option>
-                                    <option>Ready</option>
+                                    <option value="CONFIRMED">Ready (Confirmed)</option>
+                                    <option value="IN_PACKAGING">In Progress</option>
+                                    <option value="PACKED">Packed (Completed)</option>
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500"
+                                >
+                                    <option value="ALL">All Statuses</option>
+                                    <option value="CONFIRMED">Ready (Confirmed)</option>
+                                    <option value="IN_PACKAGING">In Progress</option>
+                                    <option value="PACKED">Packed (Completed)</option>
                                 </select>
                             </div>
                             <div>

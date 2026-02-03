@@ -202,14 +202,16 @@ export function ProductsList({ products = [], onAddProduct }) {
                                             {product.approvalStatus}
                                         </td>
                                         <td className="p-4 text-sm text-gray-600">
-                                            {product.warehouse || '-'}
+                                            {product.inventory && product.inventory.length > 0
+                                                ? product.inventory.map(i => i.warehouse?.name).join(', ')
+                                                : '-'}
                                         </td>
                                         <td className="p-4 font-bold text-gray-900">
                                             {product.pendingOrders || 0}
                                         </td>
                                         <td className="p-4">
-                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                                                     <Edit className="w-4 h-4" />
                                                 </button>
                                                 <button className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">

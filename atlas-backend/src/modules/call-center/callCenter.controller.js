@@ -79,6 +79,16 @@ const getPerformance = async (req, res) => {
     }
 };
 
+const getDashboardStats = async (req, res) => {
+    try {
+        const stats = await callCenterService.getDashboardStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('Dashboard Stats Error:', error);
+        res.status(500).json({ message: 'Error fetching dashboard stats', error: error.message });
+    }
+};
+
 module.exports = {
     getCustomers,
     getCustomerById,
@@ -87,5 +97,6 @@ module.exports = {
     addNote,
     getNotes,
     getAgents,
-    getPerformance
+    getPerformance,
+    getDashboardStats
 };

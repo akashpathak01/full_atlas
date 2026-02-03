@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOrders, getOrderById, createOrder, updateOrderStatus, getPackagingOrders } = require('../controllers/orderController');
+const { getOrders, getOrderById, createOrder, updateOrderStatus, getPackagingOrders } = require('../modules/orders/orders.controller');
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
 
 router.get('/packaging', verifyToken, getPackagingOrders);

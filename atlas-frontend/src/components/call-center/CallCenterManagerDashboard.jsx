@@ -1,9 +1,23 @@
-import React, { useState } from 'react';
-import { Phone, Clock, Users, CheckCircle, AlertTriangle, Play, Wrench, Plus, User, HelpCircle, LayoutDashboard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Phone, Clock, Users, CheckCircle, AlertTriangle, Play, Wrench, Plus, User, LayoutDashboard, RefreshCw } from 'lucide-react';
 import { ConfirmationModal } from './ConfirmationModal';
-import { adminCallCenterData } from '../../data/adminDummyData';
+import api from '../../lib/api';
 
 export function CallCenterManagerDashboard() {
+    const [loading, setLoading] = useState(true);
+    const [dashboardData, setDashboardData] = useState({
+        stats: {
+            totalOrders: 0,
+            pendingApproval: 0,
+            activeAgents: 0,
+            approvedToday: 0
+        },
+        awaitingApprovalOrders: [],
+        recentlyApprovedOrders: [],
+        assignedOrders: [],
+        unassignedOrders: []
+    });
+
     const [modalConfig, setModalConfig] = useState({
         isOpen: false,
         title: '',
@@ -11,6 +25,21 @@ export function CallCenterManagerDashboard() {
         onConfirm: () => { },
     });
 
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/call-center/manager-dashboard');
+            setDashboardData(response.data);
+        } catch (error) {
+            console.error('Failed to fetch call center dashboard:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
 
     const handleAction = (actionType) => {
         let config = {
@@ -42,6 +71,16 @@ export function CallCenterManagerDashboard() {
         setModalConfig(config);
     };
 
+    if (loading) {
+        return (
+            <div className="h-screen flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+        );
+    }
+
+    const { stats, awaitingApprovalOrders, recentlyApprovedOrders } = dashboardData;
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -61,7 +100,7 @@ export function CallCenterManagerDashboard() {
                     </button>
                     <div>
                         <p className="text-xs text-gray-500">Live Operations</p>
-                        <p className="text-lg font-bold text-gray-900">04:20:02 PM</p>
+                        <p className="text-lg font-bold text-gray-900">{new Date().toLocaleTimeString()}</p>
                     </div>
                 </div>
             </div>
@@ -72,28 +111,28 @@ export function CallCenterManagerDashboard() {
                     <div className="p-3 bg-blue-50 rounded-lg"><Phone className="w-8 h-8 text-blue-600" /></div>
                     <div>
                         <p className="text-sm text-gray-500">Total Orders</p>
-                        <div className="text-2xl font-bold text-gray-900">0</div>
+                        <div className="text-2xl font-bold text-gray-900">{stats.totalOrders}</div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
                     <div className="p-3 bg-orange-50 rounded-lg"><Clock className="w-8 h-8 text-orange-600" /></div>
                     <div>
                         <p className="text-sm text-gray-500">Pending Approval</p>
-                        <div className="text-2xl font-bold text-orange-600">0</div>
+                        <div className="text-2xl font-bold text-orange-600">{stats.pendingApproval}</div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
                     <div className="p-3 bg-green-50 rounded-lg"><Users className="w-8 h-8 text-green-600" /></div>
                     <div>
                         <p className="text-sm text-gray-500">Active Agents</p>
-                        <div className="text-2xl font-bold text-gray-900">0</div>
+                        <div className="text-2xl font-bold text-gray-900">{stats.activeAgents}</div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
                     <div className="p-3 bg-green-50 rounded-lg"><CheckCircle className="w-8 h-8 text-green-600" /></div>
                     <div>
                         <p className="text-sm text-gray-500">Approved Today</p>
-                        <div className="text-2xl font-bold text-green-600">0</div>
+                        <div className="text-2xl font-bold text-green-600">{stats.approvedToday}</div>
                     </div>
                 </div>
             </div>
@@ -106,15 +145,29 @@ export function CallCenterManagerDashboard() {
                             <AlertTriangle className="w-5 h-5" />
                             Orders Awaiting Approval
                         </div>
-                        <span className="bg-orange-200 text-orange-900 px-2 py-0.5 rounded text-xs font-medium">0 orders</span>
+                        <span className="bg-orange-200 text-orange-900 px-2 py-0.5 rounded text-xs font-medium">{awaitingApprovalOrders.length} orders</span>
                     </div>
-                    <div className="p-12 flex flex-col items-center justify-center text-center">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                            <CheckCircle className="w-6 h-6 text-green-600" />
+                    {awaitingApprovalOrders.length > 0 ? (
+                        <div className="divide-y divide-orange-50">
+                            {awaitingApprovalOrders.map(order => (
+                                <div key={order.id} className="p-4 flex justify-between items-center hover:bg-orange-50/50">
+                                    <div>
+                                        <p className="font-bold text-gray-900">{order.customerName}</p>
+                                        <p className="text-xs text-gray-500">{order.orderNumber}</p>
+                                    </div>
+                                    <span className="text-xs text-orange-600 font-medium">Pending Review</span>
+                                </div>
+                            ))}
                         </div>
-                        <h3 className="text-gray-900 font-medium mb-1">All Orders Approved</h3>
-                        <p className="text-gray-500 text-sm">No orders are currently awaiting approval</p>
-                    </div>
+                    ) : (
+                        <div className="p-12 flex flex-col items-center justify-center text-center">
+                            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                                <CheckCircle className="w-6 h-6 text-green-600" />
+                            </div>
+                            <h3 className="text-gray-900 font-medium mb-1">All Orders Approved</h3>
+                            <p className="text-gray-500 text-sm">No orders are currently awaiting approval</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Recently Approved Orders */}
@@ -124,15 +177,32 @@ export function CallCenterManagerDashboard() {
                             <CheckCircle className="w-5 h-5" />
                             Recently Approved Orders
                         </div>
-                        <span className="bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-medium">0 today</span>
+                        <span className="bg-green-200 text-green-900 px-2 py-0.5 rounded text-xs font-medium">{recentlyApprovedOrders.length} recent</span>
                     </div>
-                    <div className="p-12 flex flex-col items-center justify-center text-center">
-                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <Clock className="w-6 h-6 text-gray-400" />
+                    {recentlyApprovedOrders.length > 0 ? (
+                        <div className="divide-y divide-green-50">
+                            {recentlyApprovedOrders.map(order => (
+                                <div key={order.id} className="p-4 flex justify-between items-center hover:bg-green-50/50">
+                                    <div>
+                                        <p className="font-bold text-gray-900">{order.customerName}</p>
+                                        <p className="text-xs text-gray-500">{order.orderNumber}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-xs text-green-600 font-medium">Approved</span>
+                                        <p className="text-[10px] text-gray-400">{new Date(order.approvedAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <h3 className="text-gray-900 font-medium mb-1">No Recent Approvals</h3>
-                        <p className="text-gray-500 text-sm">No orders have been approved recently</p>
-                    </div>
+                    ) : (
+                        <div className="p-12 flex flex-col items-center justify-center text-center">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                <Clock className="w-6 h-6 text-gray-400" />
+                            </div>
+                            <h3 className="text-gray-900 font-medium mb-1">No Recent Approvals</h3>
+                            <p className="text-gray-500 text-sm">No orders have been approved recently</p>
+                        </div>
+                    )}
                 </div>
             </div>
 

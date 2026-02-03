@@ -14,7 +14,7 @@ const createProduct = async (req, res) => {
             stock,
             description,
             productLink,
-            warehouse,
+            warehouse, // Expecting ID now
             variants,
             status,
             sellerId
@@ -46,13 +46,32 @@ const createProduct = async (req, res) => {
             status: status || 'Active',
             productLink: productLink || null,
             variants: variants || [],
-            variants: variants || [],
             sellerId: sellerId ? parseInt(sellerId) : null,
             adminId: (role === 'ADMIN' || role === 'SUPER_ADMIN') ? userId : null
         };
 
+        // Add inventory creation if warehouse is provided
+        if (warehouse && !isNaN(parseInt(warehouse))) {
+            productData.inventory = {
+                create: {
+                    warehouseId: parseInt(warehouse),
+                    quantity: productData.stock
+                }
+            };
+        }
+
         const product = await prisma.product.create({
-            data: productData
+            data: productData,
+            include: {
+                seller: {
+                    include: {
+                        user: { select: { name: true } }
+                    }
+                },
+                inventory: {
+                    include: { warehouse: true }
+                }
+            }
         });
 
         return res.status(201).json(product);
@@ -72,8 +91,15 @@ const getProducts = async (req, res) => {
         const where = {};
 
         if (role === 'SELLER') {
-            if (!sellerId) return res.json([]);
-            where.sellerId = sellerId;
+            const seller = await prisma.seller.findUnique({
+                where: { userId: userId }
+            });
+
+            if (!seller) {
+                return res.json([]);
+            }
+
+            where.sellerId = seller.id;
         } else if (role === 'ADMIN') {
             if (req.query.sellerId) {
                 // If filtering by specific seller, ensure it's one they manage
@@ -101,6 +127,11 @@ const getProducts = async (req, res) => {
                             select: { name: true }
                         }
                     }
+                },
+                inventory: {
+                    include: {
+                        warehouse: true
+                    }
                 }
             },
             orderBy: { createdAt: 'desc' }
@@ -117,16 +148,56 @@ const getProducts = async (req, res) => {
 const updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
-        const { image, ...updateData } = req.body; // Ignore image field in updates too
+        const { image, warehouse, ...updateData } = req.body; // warehouse separate
 
         // Convert types if present
         if (updateData.price) updateData.price = parseFloat(updateData.price);
         if (updateData.purchasePrice) updateData.purchasePrice = parseFloat(updateData.purchasePrice);
         if (updateData.stock) updateData.stock = parseInt(updateData.stock);
 
+        // Update Inventory/Warehouse if provided
+        if (warehouse && !isNaN(parseInt(warehouse))) {
+            const warehouseId = parseInt(warehouse);
+
+            // Check if inventory exists
+            const existingInventory = await prisma.inventory.findUnique({
+                where: {
+                    productId_warehouseId: {
+                        productId: parseInt(id),
+                        warehouseId: warehouseId
+                    }
+                }
+            });
+
+            if (existingInventory) {
+                await prisma.inventory.update({
+                    where: { id: existingInventory.id },
+                    data: { quantity: updateData.stock !== undefined ? updateData.stock : existingInventory.quantity }
+                });
+            } else {
+                await prisma.inventory.create({
+                    data: {
+                        productId: parseInt(id),
+                        warehouseId: warehouseId,
+                        quantity: updateData.stock || 0
+                    }
+                });
+            }
+        }
+
         const product = await prisma.product.update({
             where: { id: parseInt(id) },
-            data: updateData
+            data: updateData,
+            include: {
+                seller: {
+                    include: {
+                        user: { select: { name: true } }
+                    }
+                },
+                inventory: {
+                    include: { warehouse: true }
+                }
+            }
         });
 
         return res.json(product);
@@ -138,6 +209,20 @@ const updateProduct = async (req, res) => {
 
 module.exports = {
     createProduct,
+    updateProduct
+};
+
+const getAllProducts = getProducts;
+
+const getActiveProducts = async (req, res) => {
+    req.query.active = 'true';
+    return getProducts(req, res);
+};
+
+module.exports = {
+    createProduct,
     getProducts,
+    getAllProducts,
+    getActiveProducts,
     updateProduct
 };

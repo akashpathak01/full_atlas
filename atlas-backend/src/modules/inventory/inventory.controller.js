@@ -1,4 +1,5 @@
 const inventoryService = require('./inventory.service');
+const prisma = require('../../utils/prisma');
 
 // --- Warehouse Controllers ---
 
@@ -59,10 +60,33 @@ const getMovementHistory = async (req, res) => {
     }
 };
 
+const updateStock = async (req, res) => {
+    const { productId, warehouseId, quantity } = req.body;
+    const { role } = req.user;
+
+    if (role !== 'STOCK_KEEPER' && role !== 'ADMIN') {
+        return res.status(403).json({ message: 'Only Stock Keepers can update inventory' });
+    }
+
+    try {
+        const updated = await prisma.inventory.upsert({
+            where: {
+                productId_warehouseId: { productId, warehouseId }
+            },
+            update: { quantity },
+            create: { productId, warehouseId, quantity }
+        });
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Stock update failed' });
+    }
+};
+
 module.exports = {
     createWarehouse,
     listWarehouses,
     getInventory,
+    updateStock,
     stockIn,
     stockOut,
     getMovementHistory

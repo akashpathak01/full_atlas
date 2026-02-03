@@ -1,54 +1,357 @@
-const orderService = require('./orders.service');
-
-const createOrder = async (req, res) => {
-    try {
-        const order = await orderService.createOrder(req.body, req.user);
-        res.status(201).json(order);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-};
+const prisma = require('../../utils/prisma'); // Adjusted path
 
 const getOrders = async (req, res) => {
+    const { role, id: userId, sellerId: userSellerId } = req.user;
+    const { status } = req.query;
+
     try {
-        const orders = await orderService.getOrders(req.user);
+        let where = {};
+
+        if (status) {
+            where.status = status;
+        }
+
+        if (role === 'SELLER') {
+            let sellerId = userSellerId;
+            if (!sellerId) {
+                const seller = await prisma.seller.findUnique({ where: { userId: userId } });
+                sellerId = seller?.id;
+            }
+            if (!sellerId) return res.json([]);
+            where.sellerId = sellerId;
+        } else if (role === 'CALL_CENTER_AGENT' || role === 'CALL_CENTER_MANAGER') {
+            where.status = 'PENDING_REVIEW';
+        } else if (role === 'PACKAGING_AGENT') {
+            // See only CONFIRMED orders that need packaging
+            where.status = 'CONFIRMED';
+        } else if (role === 'DELIVERY_AGENT') {
+            // See only PACKED orders that need delivery
+            where.status = 'PACKED';
+        } else if (role === 'STOCK_KEEPER') {
+            // Stock keepers see everything for inventory purposes
+            where = {};
+        } else if (role === 'ADMIN') {
+            // Admin sees ONLY orders where order.seller.adminId === logged-in admin id
+            where.seller = {
+                adminId: userId
+            };
+        } else if (role === 'SUPER_ADMIN') {
+            // Full access, no additional filtering
+        } else {
+
+            return res.status(403).json({ message: 'Unauthorized access' });
+        }
+
+
+        const orders = await prisma.order.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                orderNumber: true,
+                customerName: true,
+                customerPhone: true,
+                orderDate: true,
+                status: true,
+                totalAmount: true,
+                createdAt: true
+            }
+        });
+
         res.json(orders);
     } catch (error) {
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: 'Error fetching orders', error: error.message });
     }
 };
 
 const getOrderById = async (req, res) => {
-    try {
-        const order = await orderService.getOrderById(req.params.id, req.user);
-        res.json(order);
-    } catch (error) {
-        const status = error.message.includes('Forbidden') ? 403 :
-            error.message.includes('not found') ? 404 : 400;
-        res.status(status).json({ message: error.message });
-    }
-};
+    const { id } = req.params;
+    const { role, id: userId, sellerId: userSellerId } = req.user;
 
-const updateStatus = async (req, res) => {
-    const { status } = req.body;
-    if (!status) {
-        return res.status(400).json({ message: 'Status is required' });
+    const numericId = parseInt(id);
+    if (isNaN(numericId)) {
+        return res.status(400).json({ message: 'Invalid order ID format' });
     }
 
     try {
-        const order = await orderService.updateOrderStatus(req.params.id, status, req.user);
+        const order = await prisma.order.findUnique({
+            where: { id: numericId },
+            include: { items: true }
+        });
+
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        // Access Control
+        if (role === 'SELLER') {
+            let sellerId = userSellerId;
+            if (!sellerId) {
+                const seller = await prisma.seller.findUnique({ where: { userId: userId } });
+                sellerId = seller?.id;
+            }
+            if (order.sellerId !== sellerId) {
+                return res.status(403).json({ message: 'Unauthorized access to this order' });
+            }
+        } else if (role === 'ADMIN') {
+            // Fetch seller details to check adminId
+            const seller = await prisma.seller.findUnique({
+                where: { id: order.sellerId }
+            });
+            if (seller?.adminId !== userId) {
+                return res.status(403).json({ message: 'Unauthorized access: This order belongs to another tenant' });
+            }
+        }
+        // Call center roles and super admins can see any order (within their scope if defined)
+
+
         res.json(order);
     } catch (error) {
-        const status = error.message.includes('Forbidden') ? 403 :
-            error.message.includes('Invalid transition') ? 400 :
-                error.message.includes('not found') ? 404 : 400;
-        res.status(status).json({ message: error.message });
+        res.status(500).json({ message: 'Error fetching order details', error: error.message });
     }
 };
 
-module.exports = {
-    createOrder,
-    getOrders,
-    getOrderById,
-    updateStatus
+const createOrder = async (req, res) => {
+    const {
+        customerName,
+        customerPhone,
+        orderDate,
+        status,
+        items,
+        totalAmount,
+        shippingAddress,
+        customerNotes,
+        internalNotes
+    } = req.body;
+    const { role, id: userId, sellerId: userSellerId } = req.user;
+
+    // 1. Validation
+    if (!customerName || !customerPhone) {
+        return res.status(400).json({ message: 'customerName and customerPhone are required' });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: 'items must be a non-empty array' });
+    }
+
+    try {
+        // 2. Resolve Seller ID
+        let sellerId = userSellerId;
+        if (!sellerId && role === 'SELLER') {
+            const seller = await prisma.seller.findUnique({ where: { userId: userId } });
+            sellerId = seller?.id;
+        }
+
+        // If Admin is creating and no sellerId provided in user profile (which is true for Admin),
+        // we must check the payload for the selected sellerId.
+        if (!sellerId && (role === 'ADMIN' || role === 'SUPER_ADMIN')) {
+            if (req.body.sellerId) {
+                sellerId = req.body.sellerId;
+            } else {
+                return res.status(400).json({ message: 'Seller ID is required for Admin to create order' });
+            }
+        }
+
+        if (!sellerId) {
+            return res.status(400).json({ message: 'Seller ID could not be determined' });
+        }
+
+        const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+        const newOrder = await prisma.order.create({
+            data: {
+                orderNumber,
+                customerName,
+                customerPhone,
+                orderDate,
+                status: status || 'PENDING_REVIEW',
+                totalAmount: totalAmount ? parseFloat(totalAmount) : 0,
+                shippingAddress,
+                customerNotes,
+                internalNotes,
+                seller: {
+                    connect: { id: parseInt(sellerId) }
+                },
+                items: {
+                    create: items.map(item => ({
+                        productId: item.productId ? parseInt(item.productId) : null,
+                        variant: item.variant || null,
+                        quantity: parseInt(item.quantity) || 1,
+                        price: parseFloat(item.price) || 0,
+                        product: item.productName || `Product #${item.productId}`
+                    }))
+                }
+            },
+            include: {
+                items: true
+            }
+        });
+
+        res.status(201).json({
+            message: 'Order created successfully',
+            orderId: newOrder.id,
+            orderNumber: newOrder.orderNumber
+        });
+
+    } catch (error) {
+        console.error('Order Creation Error:', error);
+        res.status(500).json({ message: 'Internal server error during order creation', error: error.message });
+    }
 };
+
+const updateOrderStatus = async (req, res) => {
+    const { id: orderId } = req.params;
+    const { status: nextStatus } = req.body;
+    const { role } = req.user;
+
+    // 1. Strict status validation
+    const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'PACKED', 'IN_PACKAGING'];
+    if (!allowedStatuses.includes(nextStatus)) {
+        return res.status(400).json({ message: 'Invalid status requested.' });
+    }
+
+    try {
+        const order = await prisma.order.findUnique({ where: { id: parseInt(orderId) } });
+
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        const activeStatus = order.status;
+
+        // 2. Role & Transition Logic
+        if (role === 'CALL_CENTER_AGENT' || role === 'CALL_CENTER_MANAGER') {
+            if (order.status !== 'PENDING_REVIEW') {
+                return res.status(400).json({ message: 'Call Center can only process PENDING_REVIEW orders.' });
+            }
+            if (!['CONFIRMED', 'CANCELLED'].includes(nextStatus)) {
+                return res.status(400).json({ message: 'Call Center can only CONFIRM or CANCEL.' });
+            }
+        } else if (role === 'PACKAGING_AGENT') {
+            if (activeStatus === 'CONFIRMED') {
+                if (nextStatus !== 'IN_PACKAGING') {
+                    return res.status(400).json({ message: 'Can only move CONFIRMED orders to IN_PACKAGING.' });
+                }
+            } else if (activeStatus === 'IN_PACKAGING') {
+                // Must be assigned to this agent
+                const task = await prisma.packagingTask.findUnique({ where: { orderId: parseInt(orderId) } });
+                if (!task || task.agentId !== req.user.id) {
+                    return res.status(403).json({ message: 'You are not assigned to this packaging task.' });
+                }
+
+                if (nextStatus !== 'PACKED') {
+                    return res.status(400).json({ message: 'Can only move IN_PACKAGING orders to PACKED.' });
+                }
+            } else {
+                return res.status(400).json({ message: 'Invalid status for Packaging Agent.' });
+            }
+        } else {
+            return res.status(403).json({ message: 'Unauthorized. Role not allowed for this status update.' });
+        }
+
+        const updatedOrder = await prisma.$transaction(async (tx) => {
+            const ord = await tx.order.update({
+                where: { id: parseInt(orderId) },
+                data: { status: nextStatus }
+            });
+
+            // Handle Task Creation/Completion
+            if (nextStatus === 'IN_PACKAGING') {
+                await tx.packagingTask.create({
+                    data: {
+                        orderId: ord.id,
+                        agentId: req.user.id
+                    }
+                });
+            } else if (nextStatus === 'PACKED') {
+                await tx.packagingTask.update({
+                    where: { orderId: ord.id },
+                    data: { completedAt: new Date() }
+                });
+            }
+
+            return ord;
+        });
+
+        res.json(updatedOrder);
+    } catch (error) {
+        res.status(500).json({ message: 'Update failed', error: error.message });
+    }
+};
+
+const getPackagingOrders = async (req, res) => {
+    const { role, id: userId } = req.user;
+
+    const allowedRoles = ['PACKAGING_AGENT', 'ADMIN', 'SUPER_ADMIN'];
+    if (!allowedRoles.includes(role)) {
+        return res.status(403).json({ message: 'Unauthorized. Only Packaging Agents and Admins can access this endpoint.' });
+    }
+
+    try {
+        let where = {};
+
+        if (role === 'ADMIN') {
+            // Admin sees all packaging-relevant orders for their tenants
+            where = {
+                status: { in: ['CONFIRMED', 'IN_PACKAGING', 'PACKED'] },
+                seller: {
+                    adminId: userId
+                }
+            };
+        } else if (role === 'SUPER_ADMIN') {
+            // Super Admin sees everything
+            where = {
+                status: { in: ['CONFIRMED', 'IN_PACKAGING', 'PACKED'] }
+            };
+        } else if (role === 'PACKAGING_AGENT') {
+            // Fetch the agent to get their admin (createdById)
+            const agent = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { createdById: true }
+            });
+
+            if (!agent || !agent.createdById) {
+                return res.json({ orders: [] });
+            }
+
+            const adminId = agent.createdById;
+
+            where = {
+                OR: [
+                    {
+                        // 1. New orders ready for packaging (scoped to this Admin's tenants)
+                        status: 'CONFIRMED',
+                        seller: {
+                            adminId: adminId
+                        }
+                    },
+                    {
+                        // 2. Orders already being packed OR completed by THIS agent
+                        status: { in: ['IN_PACKAGING', 'PACKED'] },
+                        packagingTask: {
+                            agentId: userId
+                        }
+                    }
+                ]
+            };
+        }
+
+        const orders = await prisma.order.findMany({
+            where,
+            orderBy: { createdAt: 'desc' }, // Show newest first
+            include: {
+                items: true,
+                packagingTask: {
+                    include: {
+                        agent: {
+                            select: { name: true }
+                        }
+                    }
+                }
+            }
+        });
+
+        res.json({ orders });
+    } catch (error) {
+        console.error("Packaging Fetch Error:", error);
+        res.status(500).json({ message: 'Error fetching packaging orders', error: error.message });
+    }
+};
+
+module.exports = { getOrders, getOrderById, createOrder, updateOrderStatus, getPackagingOrders };

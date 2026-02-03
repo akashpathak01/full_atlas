@@ -14,6 +14,9 @@ app.use('/api/orders', require('./routes/order'));
 app.use('/api/customers', require('./routes/customer'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/products', require('./routes/product'));
+app.use('/api/stats', require('./modules/stats/stats.routes'));
+app.use('/api/audit-logs', require('./modules/audit-logs/auditLogs.routes'));
+app.use('/api/users', require('./modules/users/users.routes'));
 
 // Basic health check
 app.get('/health', (req, res) => {

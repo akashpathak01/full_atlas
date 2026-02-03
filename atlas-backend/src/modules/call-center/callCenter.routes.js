@@ -16,6 +16,7 @@ router.post('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADM
 router.get('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'), callCenterController.getNotes);
 
 // Manager Routes
+router.get('/manager-dashboard', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getDashboardStats);
 router.get('/agents', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getAgents);
 router.get('/performance', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getPerformance);
 

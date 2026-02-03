@@ -38,8 +38,19 @@ const completeTask = async (req, res) => {
     }
 };
 
+const getDashboardStats = async (req, res) => {
+    try {
+        const stats = await packagingService.getDashboardStats(req.user);
+        res.json(stats);
+    } catch (error) {
+        console.error("Error fetching packaging dashboard stats:", error);
+        res.status(500).json({ message: 'Error fetching dashboard stats', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
-    completeTask
+    completeTask,
+    getDashboardStats
 };

@@ -282,7 +282,7 @@ export function NewProductForm({ onBack, onSubmit }) {
                                 >
                                     <option value="">No Warehouse (Optional)</option>
                                     {warehouses.map(wh => (
-                                        <option key={wh.id} value={wh.name}>{wh.name}</option>
+                                        <option key={wh.id} value={wh.id}>{wh.name}</option>
                                     ))}
                                 </select>
                                 <p className="text-xs text-gray-500">No warehouses available. Product can still be created without warehouse assignment.</p>

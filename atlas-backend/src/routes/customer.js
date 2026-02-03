@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getCustomers, getCustomerById } = require('../controllers/customerController');
+const { getCustomers, getCustomerById } = require('../modules/customers/customers.controller');
 const { verifyToken } = require('../middleware/auth');
 
 // Note: CC Agent has read-only access to these.

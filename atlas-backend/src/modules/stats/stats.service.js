@@ -7,7 +7,7 @@ const getAdminStats = async () => {
         prisma.order.count(),
         prisma.order.aggregate({
             _sum: {
-                totalPrice: true
+                totalAmount: true
             }
         })
     ]);
@@ -16,7 +16,7 @@ const getAdminStats = async () => {
         activeUsers: userCount,
         totalSellers: sellerCount,
         totalOrders: orderCount,
-        totalRevenue: revenue._sum.totalPrice || 0,
+        totalRevenue: revenue?._sum?.totalAmount || 0,
         // Mocking performance for now
         systemPerformance: '98%',
         alerts: 0
