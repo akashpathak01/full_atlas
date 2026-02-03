@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import {
     Home, ShoppingCart, User, Phone, MapPin, Calendar,
@@ -10,27 +11,58 @@ import {
 export function OrderDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [updating, setUpdating] = useState(false);
+    const [toast, setToast] = useState(null);
+
+    const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
+    const fetchOrder = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get(`/orders/${id}`);
+            setOrder(response.data);
+            setError(null);
+        } catch (err) {
+            console.error('Failed to fetch order details:', err);
+            setError(err.response?.data?.message || 'Order not found');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchOrder = async () => {
-            try {
-                setLoading(true);
-                const response = await api.get(`/orders/${id}`);
-                setOrder(response.data);
-                setError(null);
-            } catch (err) {
-                console.error('Failed to fetch order details:', err);
-                setError(err.response?.data?.message || 'Order not found');
-            } finally {
-                setLoading(false);
-            }
-        };
-
         if (id) fetchOrder();
     }, [id]);
+
+    const handleStatusUpdate = async (newStatus) => {
+        try {
+            setUpdating(true);
+            await api.patch(`/orders/${id}/status`, { status: newStatus });
+            showToast(`Order ${newStatus.toLowerCase()} successfully!`);
+
+            // Requirement: Redirect and refresh
+            setTimeout(() => {
+                let redirectPath = '/admin/dashboard';
+                if (user.role === 'Call Center Manager') redirectPath = '/manager/orders';
+                else if (user.role === 'Call Center Agent') redirectPath = '/call-center/orders';
+                else if (user.role === 'Packaging Agent') redirectPath = '/packaging/orders';
+
+                navigate(redirectPath);
+            }, 1000);
+        } catch (err) {
+            console.error('Failed to update status:', err);
+            showToast(err.response?.data?.message || 'Failed to update status', 'error');
+        } finally {
+            setUpdating(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -70,7 +102,16 @@ export function OrderDetailPage() {
     };
 
     return (
-        <div className="space-y-6 pb-12">
+        <div className="space-y-6 pb-12 relative">
+            {/* Simple Toast Notification */}
+            {toast && (
+                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ${toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'
+                    }`}>
+                    {toast.type === 'error' ? <XCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                    <span className="font-bold">{toast.message}</span>
+                </div>
+            )}
+
             {/* Breadcrumb */}
             <div className="flex items-center text-sm text-gray-500">
                 <Home className="w-4 h-4 mr-2" />
@@ -98,13 +139,50 @@ export function OrderDetailPage() {
                         <p className="text-gray-500 text-sm mt-1">Placed on {new Date(order.createdAt).toLocaleString()}</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => navigate(-1)}
-                    className="flex items-center gap-2 bg-slate-100 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-200 transition-all font-bold text-sm active:scale-95"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to List
-                </button>
+
+                <div className="flex items-center gap-3">
+                    {/* Call Center Action Buttons */}
+                    {order.status === 'PENDING_REVIEW' && (user.role === 'Call Center Agent' || user.role === 'Call Center Manager') && (
+                        <>
+                            <button
+                                onClick={() => handleStatusUpdate('CONFIRMED')}
+                                disabled={updating}
+                                className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl hover:bg-green-700 transition-all font-bold text-sm active:scale-95 shadow-lg shadow-green-100 disabled:opacity-50"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                {updating ? 'Updating...' : 'Confirm Order'}
+                            </button>
+                            <button
+                                onClick={() => handleStatusUpdate('CANCELLED')}
+                                disabled={updating}
+                                className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-xl hover:bg-red-700 transition-all font-bold text-sm active:scale-95 shadow-lg shadow-red-100 disabled:opacity-50"
+                            >
+                                <XCircle className="w-4 h-4" />
+                                {updating ? 'Updating...' : 'Cancel Order'}
+                            </button>
+                        </>
+                    )}
+
+                    {/* Packaging Action Buttons */}
+                    {order.status === 'CONFIRMED' && user.role === 'Packaging Agent' && (
+                        <button
+                            onClick={() => handleStatusUpdate('PACKED')}
+                            disabled={updating}
+                            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm active:scale-95 shadow-lg shadow-indigo-100 disabled:opacity-50"
+                        >
+                            <Package className="w-4 h-4" />
+                            {updating ? 'Updating...' : 'Mark as Packed'}
+                        </button>
+                    )}
+
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="flex items-center gap-2 bg-slate-100 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-200 transition-all font-bold text-sm active:scale-95"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to List
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

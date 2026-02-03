@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Search,
@@ -24,25 +23,45 @@ import {
 import { Card, CardContent } from '../../components/ui/Card';
 import { cn } from '../../lib/utils';
 import { UserForm } from '../../components/forms/UserForm';
-import { adminSellersData } from '../../data/adminDummyData';
+import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+
 
 export function AdminSellersPage() {
     const navigate = useNavigate();
     const [view, setView] = useState('list'); // 'list' or 'create'
     const [searchTerm, setSearchTerm] = useState('');
-    const [sellers, setSellers] = useState(adminSellersData.map(s => ({
-        ...s,
-        initial: s.name.charAt(0),
-        color: s.status === 'Active' ? 'bg-orange-500' : 'bg-orange-400'
-    })));
+    const [sellers, setSellers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [activeSearch, setActiveSearch] = useState('');
+
+    useEffect(() => {
+        fetchSellers();
+    }, []);
+
+    const fetchSellers = async () => {
+        try {
+            setIsLoading(true);
+            const response = await api.get('/sellers');
+            const formattedSellers = (response.data || []).map(s => ({
+                ...s,
+                initial: s.name.charAt(0),
+                color: s.status === 'Active' ? 'bg-orange-500' : 'bg-orange-400'
+            }));
+            setSellers(formattedSellers);
+        } catch (error) {
+            console.error('Failed to fetch sellers:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // Filter Logic
     const filteredSellers = useMemo(() => {
         return sellers.filter(seller =>
             seller.name.toLowerCase().includes(activeSearch.toLowerCase()) ||
             seller.email.toLowerCase().includes(activeSearch.toLowerCase()) ||
-            seller.phone.includes(activeSearch)
+            (seller.phone && seller.phone.includes(activeSearch))
         );
     }, [sellers, activeSearch]);
 
@@ -50,33 +69,48 @@ export function AdminSellersPage() {
         setActiveSearch(searchTerm);
     };
 
-    const handleCreateSeller = (userData) => {
-        const newSeller = {
-            id: sellers.length + 1,
-            ...userData,
-            status: 'Active',
-            joinDate: new Date().toISOString().split('T')[0],
-            initial: userData.name.charAt(0),
-            color: 'bg-orange-500'
-        };
-        setSellers([newSeller, ...sellers]);
-        setView('list');
+    const handleCreateSeller = async (userData) => {
+        try {
+            await api.post('/sellers', {
+                ...userData,
+                shopName: userData.shopName || userData.name
+            });
+            fetchSellers();
+            setView('list');
+        } catch (error) {
+
+            console.error('Failed to create seller:', error);
+            alert(error.response?.data?.message || 'Failed to create seller');
+        }
     };
+
+    const { user: currentUser } = useAuth();
+
+    if (isLoading && sellers.length === 0) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            </div>
+        );
+    }
 
     if (view === 'create') {
         return (
-            <UserForm
-                onBack={() => setView('list')}
-                onSubmit={handleCreateSeller}
-                title="Create New Seller"
-                subtitle="Add a new seller to the platform"
-            />
+            <div className="max-w-4xl mx-auto">
+                <UserForm
+                    onBack={() => setView('list')}
+                    onSubmit={handleCreateSeller}
+                    currentUserRole={currentUser?.role}
+                    title="Onboard New Seller"
+                    subtitle="Register a new merchant to the platform"
+                />
+            </div>
         );
     }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-10">
-            {/* Breadcrumb & Header */}
+
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                     <div className="flex items-center text-xs font-medium text-gray-500 space-x-2">
@@ -233,6 +267,6 @@ export function AdminSellersPage() {
                     </table>
                 </div>
             </Card>
-        </div>
+        </div >
     );
 }

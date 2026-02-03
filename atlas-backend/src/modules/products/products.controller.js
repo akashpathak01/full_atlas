@@ -20,6 +20,8 @@ const createProduct = async (req, res) => {
             sellerId
         } = req.body;
 
+        const { role, id: userId } = req.user;
+
         const finalName = name || req.body.nameEn;
         const finalPrice = parseFloat(sellingPrice || price);
 
@@ -44,7 +46,9 @@ const createProduct = async (req, res) => {
             status: status || 'Active',
             productLink: productLink || null,
             variants: variants || [],
-            sellerId: sellerId ? parseInt(sellerId) : null
+            variants: variants || [],
+            sellerId: sellerId ? parseInt(sellerId) : null,
+            adminId: (role === 'ADMIN' || role === 'SUPER_ADMIN') ? userId : null
         };
 
         const product = await prisma.product.create({
@@ -71,12 +75,16 @@ const getProducts = async (req, res) => {
             if (!sellerId) return res.json([]);
             where.sellerId = sellerId;
         } else if (role === 'ADMIN') {
-            // Admin sees ONLY products from sellers they manage
-            where.seller = { adminId: userId };
-
-            // Allow filtering by specific seller (e.g., in Create Order dropdown)
             if (req.query.sellerId) {
+                // If filtering by specific seller, ensure it's one they manage
                 where.sellerId = parseInt(req.query.sellerId);
+                where.seller = { adminId: userId };
+            } else {
+                // Otherwise show products created by this Admin OR products from their sellers
+                where.OR = [
+                    { adminId: userId },
+                    { seller: { adminId: userId } }
+                ];
             }
         }
 

@@ -28,6 +28,7 @@ model User {
   packagingTasks   PackagingTask[]
   deliveryTasks    DeliveryTask[]
   callNotes        CallNote[]
+  adminProducts    Product[]       @relation("ProductAdmin")
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -68,6 +69,8 @@ model Product {
   variants      Json?
   sellerId      Int?
   seller        Seller?     @relation(fields: [sellerId], references: [id])
+  adminId       Int?
+  admin         User?       @relation("ProductAdmin", fields: [adminId], references: [id])
   inventory     Inventory[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt

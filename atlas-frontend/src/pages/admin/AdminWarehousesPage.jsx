@@ -9,9 +9,36 @@ export function AdminWarehousesPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
-    const filteredWarehouses = adminWarehousesData.filter(warehouse =>
-        warehouse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        warehouse.location.toLowerCase().includes(searchTerm.toLowerCase())
+    const [warehouses, setWarehouses] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch warehouses on mount
+    React.useEffect(() => {
+        const fetchWarehouses = async () => {
+            try {
+                const response = await fetch('http://localhost:5000/api/inventory/warehouses', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setWarehouses(data);
+                } else {
+                    console.error('Failed to fetch warehouses');
+                }
+            } catch (error) {
+                console.error('Error fetching warehouses:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchWarehouses();
+    }, []);
+
+    const filteredWarehouses = warehouses.filter(warehouse =>
+        warehouse.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        warehouse.location?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -83,8 +110,8 @@ export function AdminWarehousesPage() {
                                         <td className="px-6 py-4 text-gray-600 max-w-xs truncate">{warehouse.description}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${warehouse.status === 'Active'
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-gray-100 text-gray-700'
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-gray-100 text-gray-700'
                                                 }`}>
                                                 {warehouse.status}
                                             </span>

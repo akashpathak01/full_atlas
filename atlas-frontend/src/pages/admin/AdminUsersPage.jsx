@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Search,
     Filter,
@@ -27,35 +26,73 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { cn } from '../../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { UserForm } from '../../components/forms/UserForm';
+import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
-const initialUsers = [
-    { id: 1, name: 'testing tested', email: 'tetsing@gmail.com', role: 'Admin', status: 'Active', lastLogin: 'Never', initial: 't', color: 'bg-orange-400' },
-    { id: 2, name: 'omar 1234', email: 'omar@accountant.com', role: 'Finance Manager', status: 'Active', lastLogin: 'Jan 15, 2026', initial: 'o', color: 'bg-orange-500' },
-    { id: 3, name: 'Delivery Manager', email: 'deliverymanager@atlas.com', role: 'Delivery Manager', status: 'Active', lastLogin: 'Never', initial: 'D', color: 'bg-orange-600' },
-    { id: 4, name: 'Viewer User', email: 'viewer@atlas.com', role: 'Viewer', status: 'Active', lastLogin: 'Never', initial: 'v', color: 'bg-orange-400' },
-    { id: 5, name: 'Finance User', email: 'accountant@atlas.com', role: 'Accountant', status: 'Active', lastLogin: 'Never', initial: 'F', color: 'bg-orange-500' },
-    { id: 6, name: 'Delivery Agent', email: 'delivery@atlas.com', role: 'Delivery Agent', status: 'Active', lastLogin: 'Jan 20, 2026', initial: 'D', color: 'bg-orange-600' },
-    { id: 7, name: 'Packaging Agent', email: 'packaging@atlas.com', role: 'Packaging Agents', status: 'Active', lastLogin: 'Jan 20, 2026', initial: 'p', color: 'bg-orange-400' },
-];
+
+const roleDisplayMap = {
+    'SUPER_ADMIN': 'Super Admin',
+    'ADMIN': 'Admin',
+    'SELLER': 'Seller',
+    'CALL_CENTER_AGENT': 'Call Center Agent',
+    'CALL_CENTER_MANAGER': 'Call Center Manager',
+    'STOCK_KEEPER': 'Stock Keeper',
+    'PACKAGING_AGENT': 'Packaging Agent',
+    'DELIVERY_AGENT': 'Delivery Agent'
+};
 
 const roles = [
     'All Roles',
-    'Admin',
-    'Finance Manager',
-    'Delivery Manager',
-    'Viewer',
-    'Accountant',
-    'Delivery Agent',
-    'Packaging Agents'
+    ...Object.values(roleDisplayMap)
 ];
+
+const colorMap = {
+    'SUPER_ADMIN': 'bg-orange-600',
+    'ADMIN': 'bg-orange-500',
+    'SELLER': 'bg-blue-500',
+    'CALL_CENTER_AGENT': 'bg-orange-400',
+    'CALL_CENTER_MANAGER': 'bg-orange-500',
+    'STOCK_KEEPER': 'bg-orange-600',
+    'PACKAGING_AGENT': 'bg-orange-400',
+    'DELIVERY_AGENT': 'bg-orange-600'
+};
 
 export function AdminUsersPage() {
     const navigate = useNavigate();
     const [view, setView] = useState('list'); // 'list' or 'create'
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('All Roles');
-    const [users, setUsers] = useState(initialUsers);
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [activeSearch, setActiveSearch] = useState({ term: '', role: 'All Roles' });
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async () => {
+        try {
+            setIsLoading(true);
+            const response = await api.get('/users');
+            // Assuming response.data is an array of users
+            const formattedUsers = (response.data || []).map(u => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                role: roleDisplayMap[u.role?.name] || u.role?.name || 'User',
+                status: u.isActive ? 'Active' : 'Inactive',
+                lastLogin: 'Jan 20, 2026', // Mock if not in DB
+                initial: u.name.charAt(0).toUpperCase(),
+                color: colorMap[u.role?.name] || 'bg-gray-400'
+            }));
+            setUsers(formattedUsers);
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+            // alert('Failed to fetch users');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // Filter Logic
     const filteredUsers = useMemo(() => {
@@ -71,24 +108,46 @@ export function AdminUsersPage() {
         setActiveSearch({ term: searchTerm, role: roleFilter });
     };
 
-    const handleCreateUser = (newUser) => {
-        setUsers([
-            ...users,
-            {
+    const handleCreateUser = async (newUser) => {
+        try {
+            // Map role name back to uppercase if needed for backend
+            const backendRoleName = Object.keys(roleDisplayMap).find(key => roleDisplayMap[key] === newUser.role) || newUser.role;
+            await api.post('/users', {
                 ...newUser,
-                id: users.length + 1,
-                status: 'Active',
-                lastLogin: 'Never',
-                initial: newUser.name.charAt(0).toLowerCase(),
-                color: 'bg-orange-400'
-            }
-        ]);
-        setView('list');
+                roleName: backendRoleName
+            });
+            fetchUsers();
+            setView('list');
+        } catch (error) {
+            console.error('Failed to create user:', error);
+            alert(error.response?.data?.message || 'Failed to create user');
+        }
     };
 
-    if (view === 'create') {
-        return <UserForm onBack={() => setView('list')} onSubmit={handleCreateUser} />;
+    const { user: currentUser } = useAuth();
+
+    if (isLoading && users.length === 0) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
     }
+
+    if (view === 'create') {
+        return (
+            <div className="max-w-4xl mx-auto">
+                <UserForm
+                    onBack={() => setView('list')}
+                    onSubmit={handleCreateUser}
+                    currentUserRole={currentUser?.role}
+                    title="Add System User"
+                    subtitle="Create new staff account with specific permissions"
+                />
+            </div>
+        );
+    }
+
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">

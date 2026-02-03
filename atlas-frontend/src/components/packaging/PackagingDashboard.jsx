@@ -1,16 +1,35 @@
-import React from 'react';
-import { Package, Clock, CheckCircle, BarChart2, Search, ArrowRight, AlertCircle, RefreshCw, Home, LayoutGrid, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, Clock, CheckCircle, BarChart2, Search, ArrowRight, AlertCircle, RefreshCw, Home, LayoutGrid, FileText, Box } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 
 export function PackagingDashboard() {
     const navigate = useNavigate();
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // Stats matching the screenshot values (set to 0)
+    const fetchOrders = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/orders/packaging');
+            setOrders(response.data.orders);
+        } catch (error) {
+            console.error('Failed to fetch dashboard orders:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchOrders();
+    }, []);
+
+    // Stats matching the screenshot values (dynamic)
     const stats = [
-        { label: 'Pending Packaging', value: '0', icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { label: 'Pending Packaging', value: orders.length.toString(), icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50' },
         { label: 'In Progress', value: '0', icon: LayoutGrid, color: 'text-yellow-600', bg: 'bg-yellow-50' },
         { label: 'Completed Today', value: '0', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
-        { label: 'Total Records', value: '0', icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
+        { label: 'Total Records', value: orders.length.toString(), icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
     ];
 
     return (
@@ -153,11 +172,43 @@ export function PackagingDashboard() {
 
                 {/* Recent Orders */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-                        <h2 className="text-lg font-bold text-gray-900">Recent Orders</h2>
+                    <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                        <h2 className="text-lg font-bold text-gray-900">Recent Orders (Confirmed)</h2>
+                        <button onClick={() => navigate('/packaging/orders')} className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1">
+                            View All <ArrowRight className="w-3 h-3" />
+                        </button>
                     </div>
-                    <div className="h-48 flex items-center justify-center text-gray-400 text-sm italic">
-                        No recent orders found
+                    <div className="flex-1 overflow-y-auto">
+                        {loading ? (
+                            <div className="h-48 flex items-center justify-center">
+                                <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
+                            </div>
+                        ) : orders.length > 0 ? (
+                            <div className="divide-y divide-gray-50">
+                                {orders.slice(0, 5).map((order) => (
+                                    <div
+                                        key={order.id}
+                                        onClick={() => navigate(`/packaging/orders/${order.id}`)}
+                                        className="p-4 hover:bg-gray-50 cursor-pointer flex justify-between items-center transition-colors"
+                                    >
+                                        <div>
+                                            <p className="font-bold text-sm text-gray-900">{order.orderNumber || order.id}</p>
+                                            <p className="text-xs text-gray-500">{order.customerName}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-wider">
+                                                {order.status}
+                                            </span>
+                                            <p className="text-[10px] text-gray-400 mt-1">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="h-48 flex items-center justify-center text-gray-400 text-sm italic">
+                                No confirmed orders found
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

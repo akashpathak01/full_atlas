@@ -140,14 +140,19 @@ const createOrder = async (req, res) => {
             sellerId = seller?.id;
         }
 
-        if (!sellerId && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
-            return res.status(400).json({ message: 'Seller profile required' });
+        // If Admin is creating and no sellerId provided in user profile (which is true for Admin),
+        // we must check the payload for the selected sellerId.
+        if (!sellerId && (role === 'ADMIN' || role === 'SUPER_ADMIN')) {
+            if (req.body.sellerId) {
+                sellerId = req.body.sellerId;
+            } else {
+                return res.status(400).json({ message: 'Seller ID is required for Admin to create order' });
+            }
         }
 
-        // If Admin is creating and no sellerId provided, fallback to a default or error
-        // For now, assume if not SELLER, we might need a default seller or it's an error.
-        // But let's check if the payload has a sellerId? No, payload doesn't mention it.
-        // Assuming the logged-in user is a Seller.
+        if (!sellerId) {
+            return res.status(400).json({ message: 'Seller ID could not be determined' });
+        }
 
         const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
@@ -198,7 +203,7 @@ const updateOrderStatus = async (req, res) => {
     const { role } = req.user;
 
     // 1. Strict status validation
-    const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'PACKED'];
+    const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'PACKED', 'IN_PACKAGING'];
     if (!allowedStatuses.includes(nextStatus)) {
         return res.status(400).json({ message: 'Invalid status requested.' });
     }
@@ -207,6 +212,8 @@ const updateOrderStatus = async (req, res) => {
         const order = await prisma.order.findUnique({ where: { id: parseInt(orderId) } });
 
         if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        const activeStatus = order.status;
 
         // 2. Role & Transition Logic
         if (role === 'CALL_CENTER_AGENT' || role === 'CALL_CENTER_MANAGER') {
@@ -217,19 +224,49 @@ const updateOrderStatus = async (req, res) => {
                 return res.status(400).json({ message: 'Call Center can only CONFIRM or CANCEL.' });
             }
         } else if (role === 'PACKAGING_AGENT') {
-            if (order.status !== 'CONFIRMED') {
-                return res.status(400).json({ message: 'Packaging can only process CONFIRMED orders.' });
-            }
-            if (nextStatus !== 'PACKED') {
-                return res.status(400).json({ message: 'Packaging can only set status to PACKED.' });
+            if (activeStatus === 'CONFIRMED') {
+                if (nextStatus !== 'IN_PACKAGING') {
+                    return res.status(400).json({ message: 'Can only move CONFIRMED orders to IN_PACKAGING.' });
+                }
+            } else if (activeStatus === 'IN_PACKAGING') {
+                // Must be assigned to this agent
+                const task = await prisma.packagingTask.findUnique({ where: { orderId: parseInt(orderId) } });
+                if (!task || task.agentId !== req.user.id) {
+                    return res.status(403).json({ message: 'You are not assigned to this packaging task.' });
+                }
+
+                if (nextStatus !== 'PACKED') {
+                    return res.status(400).json({ message: 'Can only move IN_PACKAGING orders to PACKED.' });
+                }
+            } else {
+                return res.status(400).json({ message: 'Invalid status for Packaging Agent.' });
             }
         } else {
             return res.status(403).json({ message: 'Unauthorized. Role not allowed for this status update.' });
         }
 
-        const updatedOrder = await prisma.order.update({
-            where: { id: parseInt(orderId) },
-            data: { status: nextStatus }
+        const updatedOrder = await prisma.$transaction(async (tx) => {
+            const ord = await tx.order.update({
+                where: { id: parseInt(orderId) },
+                data: { status: nextStatus }
+            });
+
+            // Handle Task Creation/Completion
+            if (nextStatus === 'IN_PACKAGING') {
+                await tx.packagingTask.create({
+                    data: {
+                        orderId: ord.id,
+                        agentId: req.user.id
+                    }
+                });
+            } else if (nextStatus === 'PACKED') {
+                await tx.packagingTask.update({
+                    where: { orderId: ord.id },
+                    data: { completedAt: new Date() }
+                });
+            }
+
+            return ord;
         });
 
         res.json(updatedOrder);
@@ -239,21 +276,57 @@ const updateOrderStatus = async (req, res) => {
 };
 
 const getPackagingOrders = async (req, res) => {
-    const { role } = req.user;
+    const { role, id: userId } = req.user;
 
     if (role !== 'PACKAGING_AGENT') {
         return res.status(403).json({ message: 'Unauthorized. Only Packaging Agents can access this endpoint.' });
     }
 
     try {
+        // Fetch the agent to get their admin (createdById)
+        // Assuming the schema has createdById on User model
+        const agent = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { createdById: true }
+        });
+
+        if (!agent || !agent.createdById) {
+            // Fallback if no admin link, return nothing or standard confirmed
+            // For strictness, return empty or logged error
+            return res.json({ orders: [] });
+        }
+
+        const adminId = agent.createdById;
+
         const orders = await prisma.order.findMany({
-            where: { status: 'CONFIRMED' },
+            where: {
+                OR: [
+                    {
+                        // 1. New orders ready for packaging (scoped to this Admin's tenants)
+                        status: 'CONFIRMED',
+                        seller: {
+                            adminId: adminId
+                        }
+                    },
+                    {
+                        // 2. Orders already being packed by THIS agent
+                        status: 'IN_PACKAGING',
+                        packagingTask: {
+                            agentId: userId
+                        }
+                    }
+                ]
+            },
             orderBy: { createdAt: 'asc' },
-            include: { items: true }
+            include: {
+                items: true,
+                packagingTask: true
+            }
         });
 
         res.json({ orders });
     } catch (error) {
+        console.error("Packaging Fetch Error:", error);
         res.status(500).json({ message: 'Error fetching packaging orders', error: error.message });
     }
 };

@@ -1,32 +1,48 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     LayoutDashboard,
     ChevronDown,
     ArrowLeft,
     ArrowRight,
     UserPlus,
-    CheckCircle2
+    CheckCircle2,
+    Upload,
+    FileText,
+    X
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/Card';
 
-const roles = [
-    'Admin',
-    'Finance Manager',
-    'Delivery Manager',
-    'Viewer',
-    'Accountant',
-    'Delivery Agent',
-    'Packaging Agents'
-];
+const roleScopes = {
+    'Super Admin': ['Admin'],
+    'Admin': [
+        'Seller',
+        'Call Center Agent',
+        'Call Center Manager',
+        'Stock Keeper',
+        'Packaging Agent',
+        'Delivery Agent'
+    ]
+};
 
-export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle = "Add a new user to the system with specific role and permissions" }) {
+export function UserForm({
+    onBack,
+    onSubmit,
+    currentUserRole = 'Super Admin', // Default to Super Admin if not provided
+    title = "Create New User",
+    subtitle = "Add a new user to the system with specific role and permissions"
+}) {
+    const frontIdInputRef = useRef(null);
+    const backIdInputRef = useRef(null);
+
+    const availableRoles = roleScopes[currentUserRole] || [];
+
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
         role: '',
+        shopName: '',
         storeLink: '',
         bankName: '',
         accountHolder: '',
@@ -34,7 +50,14 @@ export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle
         ibanConfirmation: '',
         password: '',
         confirmPassword: '',
-        isActive: true
+        isActive: true,
+        idFrontImage: null,
+        idBackImage: null
+    });
+
+    const [fileNames, setFileNames] = useState({
+        front: 'No file chosen',
+        back: 'No file chosen'
     });
 
     const handleChange = (e) => {
@@ -43,6 +66,16 @@ export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+    };
+
+    const handleFileChange = (e, side) => {
+        const file = e.target.files[0];
+        if (file) {
+            setFileNames(prev => ({ ...prev, [side]: file.name }));
+            // For now, we'll store the file object. In a real app, you'd upload it to S3/Cloudinary 
+            // and store the URL. For this demo, we'll just store the name or a mock URL.
+            setFormData(prev => ({ ...prev, [`id${side.charAt(0).toUpperCase() + side.slice(1)}Image`]: file.name }));
+        }
     };
 
     const handleSubmit = (e) => {
@@ -54,9 +87,21 @@ export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle
         onSubmit({
             name: `${formData.firstName} ${formData.lastName}`,
             email: formData.email,
-            role: formData.role || 'Super Admin'
+            phone: formData.phone,
+            role: formData.role,
+            shopName: formData.shopName,
+            storeLink: formData.storeLink,
+            bankName: formData.bankName,
+            accountHolder: formData.accountHolder,
+            accountNumber: formData.accountNumber,
+            ibanConfirmation: formData.ibanConfirmation,
+            password: formData.password,
+            idFrontImage: formData.idFrontImage,
+            idBackImage: formData.idBackImage,
+            isActive: formData.isActive
         });
     };
+
 
     return (
         <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-12">
@@ -119,13 +164,15 @@ export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle
                             <div className="relative">
                                 <select
                                     name="role"
+                                    required
                                     value={formData.role}
                                     onChange={handleChange}
-                                    className="w-full appearance-none pl-4 pr-10 py-3 border-2 border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-50/50 focus:border-blue-400 transition-all text-gray-700 font-medium"
-                                    required
+                                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-400 transition-all appearance-none cursor-pointer font-medium"
                                 >
-                                    <option value="" disabled>Select User Role</option>
-                                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                                    <option value="">Select a role</option>
+                                    {availableRoles.map(role => (
+                                        <option key={role} value={role}>{role}</option>
+                                    ))}
                                 </select>
                                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                             </div>
@@ -140,7 +187,10 @@ export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle
                             <h2 className="text-lg font-bold text-gray-800">Store Information</h2>
                             <p className="text-xs text-gray-500 font-medium">Store details and website link</p>
                         </div>
-                        <InputField label="Store Link (Optional)" name="storeLink" value={formData.storeLink} onChange={handleChange} placeholder="https://yourstore.com" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <InputField label="Shop Name (Optional)" name="shopName" value={formData.shopName} onChange={handleChange} placeholder="Enter shop name" />
+                            <InputField label="Store Link (Optional)" name="storeLink" value={formData.storeLink} onChange={handleChange} placeholder="https://yourstore.com" />
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -168,28 +218,56 @@ export function UserForm({ onBack, onSubmit, title = "Create New User", subtitle
                             <p className="text-xs text-gray-500 font-medium">Upload ID images for verification</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-700 uppercase tracking-widest">ID Front Image (Optional)</label>
-                                <div className="border-2 border-dashed border-slate-100 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer group">
+                            <div className="space-y-2 text-left">
+                                <label className="text-xs font-bold text-gray-700 uppercase tracking-widest ml-1">ID Front Image (Optional)</label>
+                                <input
+                                    type="file"
+                                    ref={frontIdInputRef}
+                                    className="hidden"
+                                    onChange={(e) => handleFileChange(e, 'front')}
+                                    accept="image/*"
+                                />
+                                <div
+                                    onClick={() => frontIdInputRef.current?.click()}
+                                    className="border-2 border-dashed border-slate-100 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer group"
+                                >
                                     <div className="flex flex-col items-center">
                                         <div className="inline-flex items-center px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-semibold text-gray-600 mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all">
+                                            <Upload className="w-4 h-4 mr-2" />
                                             Choose file
                                         </div>
-                                        <span className="text-xs text-gray-400">No file chosen</span>
+                                        <span className="text-xs text-gray-400 font-medium">
+                                            {fileNames.front !== 'No file chosen' && <CheckCircle2 className="inline w-3 h-3 mr-1 text-emerald-500" />}
+                                            {fileNames.front}
+                                        </span>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 mt-2">Upload the front side of ID card</p>
+                                    <p className="text-[10px] text-gray-400 mt-2 font-medium">Upload the front side of ID card</p>
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-700 uppercase tracking-widest">ID Back Image (Optional)</label>
-                                <div className="border-2 border-dashed border-slate-100 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer group">
+                            <div className="space-y-2 text-left">
+                                <label className="text-xs font-bold text-gray-700 uppercase tracking-widest ml-1">ID Back Image (Optional)</label>
+                                <input
+                                    type="file"
+                                    ref={backIdInputRef}
+                                    className="hidden"
+                                    onChange={(e) => handleFileChange(e, 'back')}
+                                    accept="image/*"
+                                />
+                                <div
+                                    onClick={() => backIdInputRef.current?.click()}
+                                    className="border-2 border-dashed border-slate-100 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer group"
+                                >
                                     <div className="flex flex-col items-center">
                                         <div className="inline-flex items-center px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-semibold text-gray-600 mb-2 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all">
+                                            <Upload className="w-4 h-4 mr-2" />
                                             Choose file
                                         </div>
-                                        <span className="text-xs text-gray-400">No file chosen</span>
+                                        <span className="text-xs text-gray-400 font-medium">
+                                            {fileNames.back !== 'No file chosen' && <CheckCircle2 className="inline w-3 h-3 mr-1 text-emerald-500" />}
+                                            {fileNames.back}
+                                        </span>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 mt-2">Upload the back side of ID card</p>
+                                    <p className="text-[10px] text-gray-400 mt-2 font-medium">Upload the back side of ID card</p>
                                 </div>
                             </div>
                         </div>

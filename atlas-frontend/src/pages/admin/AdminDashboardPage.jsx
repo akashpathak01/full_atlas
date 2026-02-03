@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users,
@@ -24,14 +23,39 @@ import {
     Warehouse
 } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
+import api from '../../lib/api';
 
 export function AdminDashboardPage() {
     const navigate = useNavigate();
+    const [stats, setStats] = useState({
+        activeUsers: 0,
+        totalSellers: 0,
+        totalOrders: 0,
+        totalRevenue: 0,
+        systemPerformance: '0%',
+        alerts: 0
+    });
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                setIsLoading(true);
+                const response = await api.get('/stats/admin');
+                setStats(response.data);
+            } catch (error) {
+                console.error('Failed to fetch dashboard stats:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchStats();
+    }, []);
 
     const metricCards = [
         {
             title: "Active Users",
-            value: "18",
+            value: stats.activeUsers.toString(),
             link: "View all users →",
             path: "/admin/users",
             icon: <Users className="w-5 h-5 text-blue-600" />,
@@ -39,16 +63,16 @@ export function AdminDashboardPage() {
         },
         {
             title: "System Alerts",
-            value: "0",
+            value: stats.alerts.toString(),
             link: "View all alerts →",
             path: "/admin/dashboard",
             icon: <AlertTriangle className="w-5 h-5 text-red-600" />,
             iconBg: "bg-red-50",
-            alert: true
+            alert: stats.alerts > 0
         },
         {
             title: "Total Sales",
-            value: "AED 22,962",
+            value: `AED ${stats.totalRevenue.toLocaleString()}`,
             link: "View details →",
             path: "/admin/finance",
             icon: <TrendingUp className="w-5 h-5 text-green-600" />,
@@ -56,13 +80,14 @@ export function AdminDashboardPage() {
         },
         {
             title: "System Performance",
-            value: "58%",
+            value: stats.systemPerformance,
             link: "",
             path: "",
             icon: <Activity className="w-5 h-5 text-purple-600" />,
             iconBg: "bg-purple-50",
         }
     ];
+
 
     const drilldownReports = [
         {

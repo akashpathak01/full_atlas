@@ -20,11 +20,39 @@ export function AdminAddWarehousePage() {
         }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log('Submitting warehouse data:', formData);
-        // Here you would typically call an API to create the warehouse
-        navigate('/admin/inventory/warehouses');
+        try {
+            // Using /api/inventory/warehouses endpoint
+            // The backend expects: { name, location, description, status: 'Active'/'Inactive' }
+            // Our form has isActive boolean, so we map it.
+            const payload = {
+                name: formData.name,
+                location: formData.location,
+                description: formData.description,
+                status: formData.isActive ? 'Active' : 'Inactive'
+            };
+
+            const response = await fetch('http://localhost:5000/api/inventory/warehouses', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to create warehouse');
+            }
+
+            // Success
+            navigate('/admin/inventory/warehouses');
+        } catch (error) {
+            console.error('Error creating warehouse:', error);
+            alert(error.message);
+        }
     };
 
     return (

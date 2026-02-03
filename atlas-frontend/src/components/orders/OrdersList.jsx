@@ -231,7 +231,7 @@ export function OrdersList({ onAddNewOrder }) {
                             </button>
                         </div>
                         <div className="text-sm font-medium text-gray-500">
-                            0 orders
+                            {orders.length} orders
                         </div>
                     </div>
                 </div>
@@ -262,81 +262,85 @@ export function OrdersList({ onAddNewOrder }) {
                         </button>
                     </div>
                 </div>
-                <div className="overflow-x-auto text-center py-20 bg-gray-50/50">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">
-                            <Search className="w-8 h-8 text-gray-300" />
+                {!loading && !error && orders.length === 0 && (
+                    <div className="overflow-x-auto text-center py-20 bg-gray-50/50">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">
+                                <Search className="w-8 h-8 text-gray-300" />
+                            </div>
+                            <div className="space-y-1">
+                                <h4 className="text-lg font-bold text-gray-800">No orders found</h4>
+                                <p className="text-gray-500 text-sm">Create your first order to get started</p>
+                            </div>
+                            <button
+                                onClick={onAddNewOrder}
+                                className="bg-[#E15B2D] text-white px-8 py-2.5 rounded-lg font-bold shadow-md hover:bg-[#d05026] mt-2"
+                            >
+                                + Add New Order
+                            </button>
                         </div>
-                        <div className="space-y-1">
-                            <h4 className="text-lg font-bold text-gray-800">No orders found</h4>
-                            <p className="text-gray-500 text-sm">Create your first order to get started</p>
-                        </div>
-                        <button
-                            onClick={onAddNewOrder}
-                            className="bg-[#E15B2D] text-white px-8 py-2.5 rounded-lg font-bold shadow-md hover:bg-[#d05026] mt-2"
-                        >
-                            + Add New Order
-                        </button>
                     </div>
-                </div>
+                )}
 
-                {/* Table Structure (Hidden when empty but implemented for reference) */}
                 {/* Table Structure */}
-                <table className="w-full text-left">
-                    <thead className="bg-[#FFF8F1] border-b border-[#FFE0CE]">
-                        <tr>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider"># Order Code</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Customer</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Phone</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Product</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Qty</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Unit Price</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Total</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 font-medium text-sm">
-                        {loading ? (
-                            <tr><td colSpan="9" className="p-8 text-center text-gray-500">Loading orders...</td></tr>
-                        ) : error ? (
-                            <tr><td colSpan="9" className="p-8 text-center text-red-500">{error}</td></tr>
-                        ) : orders.length === 0 ? (
-                            <tr><td colSpan="9" className="p-8 text-center text-gray-500">No orders found.</td></tr>
-                        ) : (
-                            orders
-                                .filter(o => activeStatus === 'All Orders' || o.status === activeStatus.toUpperCase() || (activeStatus === 'Confirmed' && o.status === 'CONFIRMED'))
-                                .map(order => (
-                                    <tr
-                                        key={order.id}
-                                        className="hover:bg-gray-50 transition-colors cursor-pointer"
-                                        onClick={() => navigate(`/admin/orders/${order.id}`)}
-                                    >
-                                        <td className="px-6 py-4">#{order.orderNumber || order.id}</td>
-                                        <td className="px-6 py-4 font-semibold text-gray-800">{order.customerName}</td>
-                                        <td className="px-6 py-4 text-gray-500">{order.customerPhone}</td>
-                                        <td className="px-6 py-4">{order.items?.[0]?.product || 'Item'}</td>
-                                        <td className="px-6 py-4">{order.items?.reduce((a, b) => a + b.quantity, 0)}</td>
-                                        <td className="px-6 py-4">{order.items?.[0]?.unitPrice || 0}</td>
-                                        <td className="px-6 py-4 font-bold text-[#E15B2D]">{order.totalAmount} AED</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
-                                                order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
-                                                    'bg-gray-100 text-gray-700'
-                                                }`}>
-                                                {order.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="text-gray-400 hover:text-[#E15B2D]">
-                                                <MoreVertical className="w-5 h-5" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                        )}
-                    </tbody>
-                </table>
+                {(loading || error || orders.length > 0) && (
+                    <table className="w-full text-left">
+                        <thead className="bg-[#FFF8F1] border-b border-[#FFE0CE]">
+
+                            <tr>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider"># Order Code</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Customer</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Phone</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Product</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Qty</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Unit Price</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Total</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-bold text-[#A44D2A] uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 font-medium text-sm">
+                            {loading ? (
+                                <tr><td colSpan="9" className="p-8 text-center text-gray-500">Loading orders...</td></tr>
+                            ) : error ? (
+                                <tr><td colSpan="9" className="p-8 text-center text-red-500">{error}</td></tr>
+                            ) : orders.length === 0 ? (
+                                <tr><td colSpan="9" className="p-8 text-center text-gray-500">No orders found.</td></tr>
+                            ) : (
+                                orders
+                                    .filter(o => activeStatus === 'All Orders' || o.status === activeStatus.toUpperCase() || (activeStatus === 'Confirmed' && o.status === 'CONFIRMED'))
+                                    .map(order => (
+                                        <tr
+                                            key={order.id}
+                                            className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                            onClick={() => navigate(`/admin/orders/${order.id}`)}
+                                        >
+                                            <td className="px-6 py-4">#{order.orderNumber || order.id}</td>
+                                            <td className="px-6 py-4 font-semibold text-gray-800">{order.customerName}</td>
+                                            <td className="px-6 py-4 text-gray-500">{order.customerPhone}</td>
+                                            <td className="px-6 py-4">{order.items?.[0]?.product || 'Item'}</td>
+                                            <td className="px-6 py-4">{order.items?.reduce((a, b) => a + b.quantity, 0)}</td>
+                                            <td className="px-6 py-4">{order.items?.[0]?.unitPrice || 0}</td>
+                                            <td className="px-6 py-4 font-bold text-[#E15B2D]">{order.totalAmount} AED</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 rounded text-xs font-bold ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                                                    order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
+                                                        'bg-gray-100 text-gray-700'
+                                                    }`}>
+                                                    {order.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button className="text-gray-400 hover:text-[#E15B2D]">
+                                                    <MoreVertical className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                            )}
+                        </tbody>
+                    </table>
+                )}
             </div>
         </div>
     );

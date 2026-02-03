@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     ArrowLeft, Home, Info, Plus, Image as ImageIcon,
     X, Save, HelpCircle
 } from 'lucide-react';
+import api from '../../lib/api';
 
 export function NewProductForm({ onBack, onSubmit }) {
+    const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || '{}'));
+    const [sellers, setSellers] = useState([]);
     const [formData, setFormData] = useState({
         nameEn: '',
         nameAr: '',
@@ -18,10 +21,41 @@ export function NewProductForm({ onBack, onSubmit }) {
         productLink: '',
         description: '',
         variants: [],
-        image: null
+        image: null,
+        sellerId: ''
     });
 
+    useEffect(() => {
+        if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+            const fetchSellers = async () => {
+                try {
+                    const response = await api.get('/sellers');
+                    setSellers(response.data);
+                } catch (error) {
+                    console.error("Error fetching sellers:", error);
+                }
+            };
+            fetchSellers();
+        }
+    }, [user.role]);
+
+    const [warehouses, setWarehouses] = useState([]);
+
+    // Fetch warehouses for the dropdown
+    useEffect(() => {
+        const fetchWarehouses = async () => {
+            try {
+                const response = await api.get('/inventory/warehouses');
+                setWarehouses(response.data || []);
+            } catch (error) {
+                console.error("Error fetching warehouses:", error);
+            }
+        };
+        fetchWarehouses();
+    }, []);
+
     const [currentVariant, setCurrentVariant] = useState('');
+
 
     const handleAddVariant = () => {
         if (currentVariant.trim()) {
@@ -60,6 +94,7 @@ export function NewProductForm({ onBack, onSubmit }) {
             status: 'Active',
             warehouse: formData.warehouse,
             variants: formData.variants,
+            sellerId: formData.sellerId
         };
         onSubmit(payload);
     };
@@ -131,7 +166,28 @@ export function NewProductForm({ onBack, onSubmit }) {
 
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
+                                <div className="space-y-1.5 md:col-span-2">
+                                    <label className="text-sm font-bold text-gray-700">Assign to Seller <span className="text-[#E15B2D]">*</span></label>
+                                    <select
+                                        value={formData.sellerId}
+                                        onChange={(e) => handleInputChange('sellerId', e.target.value)}
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E15B2D]/20 focus:border-[#E15B2D] outline-none transition-all"
+                                        required
+                                    >
+                                        <option value="">Select a seller</option>
+                                        {sellers.map(seller => (
+                                            <option key={seller.id} value={seller.id}>
+                                                {seller.name || `Seller #${seller.id}`}
+                                            </option>
+                                        ))}
+
+                                    </select>
+                                    <p className="text-xs text-gray-500">Products must be assigned to a seller to be visible in their inventory</p>
+                                </div>
+                            )}
                             <div className="space-y-1.5">
+
                                 <label className="text-sm font-bold text-gray-700">Product Name (English) <span className="text-[#E15B2D]">*</span></label>
                                 <input
                                     type="text"
@@ -225,8 +281,9 @@ export function NewProductForm({ onBack, onSubmit }) {
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E15B2D]/20 focus:border-[#E15B2D] outline-none transition-all"
                                 >
                                     <option value="">No Warehouse (Optional)</option>
-                                    <option value="dxb">Dubai Main</option>
-                                    <option value="auh">Abu Dhabi Branch</option>
+                                    {warehouses.map(wh => (
+                                        <option key={wh.id} value={wh.name}>{wh.name}</option>
+                                    ))}
                                 </select>
                                 <p className="text-xs text-gray-500">No warehouses available. Product can still be created without warehouse assignment.</p>
                             </div>

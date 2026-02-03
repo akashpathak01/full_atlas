@@ -6,13 +6,16 @@ const createOrder = async (orderData, user) => {
     const {
         customerPhone,
         customerName,
-        customerEmail,
+        customerEmail, // Kept for logic, though removed from frontend payload
         shippingAddress,
         customerAddress,
         items,
         orderItems,
         sellerId: requestedSellerId,
-        status: requestedStatus
+        status: requestedStatus,
+        orderDate,
+        customerNotes,
+        internalNotes
     } = orderData;
 
     // 1. Robust Item Validation
@@ -85,6 +88,14 @@ const createOrder = async (orderData, user) => {
                 status: requestedStatus || ORDER_STATUS.CREATED,
                 sellerId: parseInt(sellerId),
                 customerId: customer.id,
+                // Redundant fields as per schema (snapshot shows these exist on Order table)
+                customerName: customerName,
+                customerPhone: customerPhone,
+                shippingAddress: finalAddress,
+                orderDate: orderDate || new Date().toISOString(),
+                customerNotes: customerNotes || null,
+                internalNotes: internalNotes || null,
+                totalAmount: itemsWithNames.reduce((sum, item) => sum + (item.price * item.quantity), 0),
                 items: {
                     create: itemsWithNames
                 }

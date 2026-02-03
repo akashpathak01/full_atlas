@@ -520,6 +520,13 @@ function App() {
               </MainLayout>
             </ProtectedRoute>
           } />
+          <Route path="/packaging/orders/:id" element={
+            <ProtectedRoute allowedRoles={['Packaging Agent', 'Admin', 'Super Admin']}>
+              <MainLayout>
+                <OrderDetailPage />
+              </MainLayout>
+            </ProtectedRoute>
+          } />
           <Route path="/packaging/materials" element={
             <ProtectedRoute allowedRoles={['Packaging Agent', 'Admin', 'Super Admin']}>
               <MainLayout>

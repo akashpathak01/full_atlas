@@ -134,13 +134,6 @@ export function ProductsList({ products = [], onAddProduct }) {
                             </div>
                             <h3 className="text-lg font-bold text-gray-900 mb-1">No Products Found</h3>
                             <p className="text-gray-500 mb-6">Start by adding your first product to the inventory.</p>
-                            <button
-                                onClick={onAddProduct}
-                                className="inline-flex items-center gap-2 bg-[#E15B2D] text-white px-6 py-3 rounded-lg hover:bg-[#d05026] transition-colors shadow-md font-bold"
-                            >
-                                <Plus className="w-5 h-5" />
-                                Add Your First Product
-                            </button>
                             <div className="mt-8 h-1 bg-gray-100 rounded-full w-full max-w-sm mx-auto overflow-hidden">
                                 <div className="h-full bg-[#E15B2D] w-3/4 rounded-full"></div>
                             </div>

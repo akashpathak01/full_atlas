@@ -1,12 +1,44 @@
-import React, { useState } from 'react';
-import { Search, Filter, ScanLine, Info, HelpCircle, Package, ArrowRight, Eye, Printer, CheckSquare, Home, List, Box } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, ScanLine, Info, HelpCircle, Package, ArrowRight, Eye, Printer, CheckSquare, Home, List, Box, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 
 export function PackagingOrders() {
     const navigate = useNavigate();
-    // Empty initial state to match screenshot
     const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+
+    const fetchOrders = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/orders/packaging');
+            setOrders(response.data.orders);
+        } catch (error) {
+            console.error('Failed to fetch packaging orders:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdateStatus = async (orderId, newStatus) => {
+        try {
+            await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+            fetchOrders(); // Refresh list
+        } catch (error) {
+            console.error(`Failed to update status to ${newStatus}:`, error);
+            alert(`Failed to update status: ${error.response?.data?.message || error.message}`);
+        }
+    };
+
+    useEffect(() => {
+        fetchOrders();
+    }, []);
+
+    const filteredOrders = orders.filter(order =>
+        order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <div className="space-y-6">
@@ -116,30 +148,58 @@ export function PackagingOrders() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {orders.length > 0 ? (
-                                        orders.map((order) => (
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan="8" className="px-6 py-24 text-center">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                                                    <h3 className="text-gray-900 font-bold">Loading orders...</h3>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : filteredOrders.length > 0 ? (
+                                        filteredOrders.map((order) => (
                                             <tr key={order.id} className="hover:bg-gray-50 border-b border-gray-50">
-                                                <td className="px-6 py-4 font-bold text-blue-600">{order.id}</td>
-                                                <td className="px-6 py-4 font-medium">{order.product}</td>
-                                                <td className="px-6 py-4">{order.customer}</td>
-                                                <td className="px-6 py-4 text-gray-500">{order.address}</td>
-                                                <td className="px-6 py-4 font-bold">{order.quantity}</td>
+                                                <td className="px-6 py-4 font-bold text-blue-600">{order.orderNumber || order.id}</td>
+                                                <td className="px-6 py-4 font-medium">
+                                                    {order.items?.length > 0 ? order.items[0].product : 'Order Items'}
+                                                </td>
+                                                <td className="px-6 py-4">{order.customerName}</td>
+                                                <td className="px-6 py-4 text-gray-500 truncate max-w-xs">{order.shippingAddress || 'No address'}</td>
+                                                <td className="px-6 py-4 font-bold">{order.items?.length || 0}</td>
                                                 <td className="px-6 py-4">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                                ${order.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                            order.status === 'In Progress' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800">
                                                         {order.status}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-gray-500">{order.date}</td>
+                                                <td className="px-6 py-4 text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex gap-2">
-                                                        <button className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-lg transition-colors" title="View">
+                                                        <button
+                                                            onClick={() => navigate(`/packaging/orders/${order.id}`)}
+                                                            className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
+                                                            title="View Details"
+                                                        >
                                                             <Eye className="w-4 h-4" />
                                                         </button>
-                                                        <button className="p-2 bg-gray-50 text-gray-400 hover:text-green-600 rounded-lg transition-colors" title="Print Label">
-                                                            <Printer className="w-4 h-4" />
-                                                        </button>
+
+                                                        {order.status === 'CONFIRMED' && (
+                                                            <button
+                                                                onClick={() => handleUpdateStatus(order.id, 'IN_PACKAGING')}
+                                                                className="px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-lg hover:bg-yellow-600 shadow-sm transition-colors flex items-center gap-1"
+                                                            >
+                                                                <Box className="w-3 h-3" /> Start
+                                                            </button>
+                                                        )}
+
+                                                        {order.status === 'IN_PACKAGING' && (
+                                                            <button
+                                                                onClick={() => handleUpdateStatus(order.id, 'PACKED')}
+                                                                className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 shadow-sm transition-colors flex items-center gap-1"
+                                                            >
+                                                                <CheckSquare className="w-3 h-3" /> Done
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

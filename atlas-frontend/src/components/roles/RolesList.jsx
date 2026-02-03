@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Users,
     Search,
@@ -13,119 +13,72 @@ import {
     ChevronRight,
     FileCode
 } from 'lucide-react';
+import api from '../../lib/api';
 
-const rolesData = [
-    {
-        id: 1,
-        name: 'Accountant',
-        permissions: 0,
-        description: 'Manages financial operations and reports',
-        status: 'Active',
-        isProtected: true,
-        users: 0,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 2,
-        name: 'Admin',
-        permissions: 0,
-        description: 'System administrator with full access',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 3,
-        name: 'Call Center Agent',
-        permissions: 0,
-        description: 'Handles customer calls and order processing',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 4,
-        name: 'Call Center Manager',
-        permissions: 0,
-        description: 'Manages call center operations and team',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 5,
-        name: 'Delivery Agent',
-        permissions: 0,
-        description: 'Handles delivery operations and tracking',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 6,
-        name: 'Packaging Agent',
-        permissions: 0,
-        description: 'Handles packaging and preparation',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 7,
-        name: 'Seller',
-        permissions: 0,
-        description: 'Merchant dashboard access',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 8,
-        name: 'Stock Keeper',
-        permissions: 0,
-        description: 'Manages warehouse inventory and stock',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    },
-    {
-        id: 9,
-        name: 'Super Admin',
-        permissions: 0,
-        description: 'Highest level control access',
-        status: 'Active',
-        isProtected: true,
-        users: 1,
-        created: 'Jan 22, 2026',
-        iconColor: 'text-blue-600',
-        bgColor: 'bg-blue-50'
-    }
-];
+const roleDisplayMap = {
+    'SUPER_ADMIN': 'Super Admin',
+    'ADMIN': 'Admin',
+    'SELLER': 'Seller',
+    'CALL_CENTER_AGENT': 'Call Center Agent',
+    'CALL_CENTER_MANAGER': 'Call Center Manager',
+    'STOCK_KEEPER': 'Stock Keeper',
+    'PACKAGING_AGENT': 'Packaging Agent',
+    'DELIVERY_AGENT': 'Delivery Agent'
+};
+
+const colorMap = {
+    'SUPER_ADMIN': { bgColor: 'bg-orange-50', iconColor: 'text-orange-600' },
+    'ADMIN': { bgColor: 'bg-blue-50', iconColor: 'text-blue-600' },
+    'SELLER': { bgColor: 'bg-green-50', iconColor: 'text-green-600' },
+    'CALL_CENTER_AGENT': { bgColor: 'bg-yellow-50', iconColor: 'text-yellow-600' },
+    'CALL_CENTER_MANAGER': { bgColor: 'bg-orange-50', iconColor: 'text-orange-600' },
+    'STOCK_KEEPER': { bgColor: 'bg-gray-50', iconColor: 'text-gray-600' },
+    'PACKAGING_AGENT': { bgColor: 'bg-purple-50', iconColor: 'text-purple-600' },
+    'DELIVERY_AGENT': { bgColor: 'bg-red-50', iconColor: 'text-red-600' }
+};
 
 export function RolesList({ onAddUser, onManagePermissions }) {
+    const [roles, setRoles] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        fetchRoles();
+    }, []);
+
+    const fetchRoles = async () => {
+        try {
+            setIsLoading(true);
+            const response = await api.get('/roles');
+            // Assuming backend map is: { id, name, users: count, ... }
+            const formattedRoles = (response.data || []).map(r => ({
+                id: r.id,
+                name: r.name,
+                displayName: roleDisplayMap[r.name] || r.name,
+                users: r.users || 0,
+                permissions: Array.isArray(r.permissions) ? r.permissions.length : 0,
+                description: r.description || `Management role for ${roleDisplayMap[r.name] || r.name}`,
+                status: r.status || 'Active',
+                isProtected: true,
+                created: 'Jan 22, 2026',
+                iconColor: colorMap[r.name]?.iconColor || 'text-blue-600',
+                bgColor: colorMap[r.name]?.bgColor || 'bg-blue-50'
+            }));
+            setRoles(formattedRoles);
+        } catch (error) {
+            console.error('Failed to fetch roles:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (isLoading && roles.length === 0) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -170,7 +123,7 @@ export function RolesList({ onAddUser, onManagePermissions }) {
 
             {/* Roles Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {rolesData.map((role) => (
+                {roles.map((role) => (
                     <div key={role.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all group p-5 flex flex-col h-full relative overflow-hidden">
                         {/* Header */}
                         <div className="flex justify-between items-start mb-4">
@@ -179,7 +132,7 @@ export function RolesList({ onAddUser, onManagePermissions }) {
                                     <Users className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-gray-900 text-lg group-hover:text-blue-600 transition-colors uppercase tracking-tight">{role.name}</h3>
+                                    <h3 className="font-black text-gray-900 text-lg group-hover:text-blue-600 transition-colors uppercase tracking-tight">{role.displayName}</h3>
                                     <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">{role.permissions} permissions</p>
                                 </div>
                             </div>
