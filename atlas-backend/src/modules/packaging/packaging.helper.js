@@ -36,8 +36,8 @@ const validateCompletion = async (taskId, agentId) => {
     if (task.completedAt) {
         throw new Error('Task is already completed');
     }
-    if (task.order.status !== 'PACKING') {
-        throw new Error(`Order must be in PACKING status for completion. Current status: ${task.order.status}`);
+    if (task.order.status !== 'IN_PACKAGING') {
+        throw new Error(`Order must be in IN_PACKAGING status for completion. Current status: ${task.order.status}`);
     }
 
     return task;

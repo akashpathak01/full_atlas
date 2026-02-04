@@ -48,9 +48,49 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
+const listMaterials = async (req, res) => {
+    try {
+        const materials = await packagingService.listMaterials(req.user);
+        res.json(materials);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching materials', error: error.message });
+    }
+};
+
+const createMaterial = async (req, res) => {
+    try {
+        const material = await packagingService.createMaterial(req.body, req.user);
+        res.status(201).json(material);
+    } catch (error) {
+        res.status(400).json({ message: 'Error creating material', error: error.message });
+    }
+};
+
+const updateMaterial = async (req, res) => {
+    try {
+        const material = await packagingService.updateMaterial(req.params.id, req.body, req.user);
+        res.json(material);
+    } catch (error) {
+        res.status(400).json({ message: 'Error updating material', error: error.message });
+    }
+};
+
+const deleteMaterial = async (req, res) => {
+    try {
+        await packagingService.deleteMaterial(req.params.id, req.user);
+        res.json({ message: 'Material deleted successfully' });
+    } catch (error) {
+        res.status(400).json({ message: 'Error deleting material', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
     completeTask,
-    getDashboardStats
+    getDashboardStats,
+    listMaterials,
+    createMaterial,
+    updateMaterial,
+    deleteMaterial
 };
