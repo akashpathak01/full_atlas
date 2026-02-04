@@ -1,9 +1,127 @@
-import React, { useState } from 'react';
-import { Home, TrendingUp, Download, Users, Percent, Trophy, ShoppingCart, BarChart, Table, Star, ArrowLeft, Eye, FileText, CheckCircle2, Layout, Lightbulb, Award, Timer } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Home, TrendingUp, Download, Users, Percent, Trophy, ShoppingCart, BarChart, Table, Star, ArrowLeft, Eye, FileText, CheckCircle2, Layout, Lightbulb, Award, Timer, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function ManagerPerformancePage() {
     const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [performanceData, setPerformanceData] = useState(null);
+
+    useEffect(() => {
+        fetchPerformanceData();
+    }, []);
+
+    const fetchPerformanceData = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/call-center/performance-reports');
+            setPerformanceData(response.data);
+        } catch (error) {
+            console.error('Error fetching performance data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExportReport = () => {
+        if (!performanceData || !agentDetails) return;
+
+        const doc = new jsPDF();
+        const dateStr = new Date().toLocaleString();
+
+        // 1. Title & Branding
+        doc.setFontSize(22);
+        doc.setTextColor(234, 88, 12); // Orange-600
+        doc.text("ATLAS - Agent Performance Report", 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${dateStr}`, 14, 28);
+        doc.text("Module: Call Center Management", 14, 33);
+        doc.line(14, 36, 196, 36);
+
+        // 2. Summary Statistics Section
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text("Performance Summary", 14, 46);
+        
+        doc.setFontSize(10);
+        const stats = [
+            [`Total Agents: ${cards.totalAgents}`, `Avg Performance: ${cards.avgPerformance}`],
+            [`Top Performer: ${cards.topPerformer}`, `Total Orders Handled: ${cards.totalOrders}`]
+        ];
+
+        autoTable(doc, {
+            startY: 50,
+            head: [],
+            body: stats,
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 90 } }
+        });
+
+        // 3. Detailed Metrics Table
+        doc.setFontSize(14);
+        doc.text("Detailed Agent Metrics", 14, doc.lastAutoTable.finalY + 15);
+
+        const tableHeaders = [["Agent Name", "Email", "Orders", "Success Rate", "Resp. Time", "Rating", "Score"]];
+        const tableBody = agentDetails.map(agent => [
+            agent.name,
+            agent.email,
+            agent.ordersHandled,
+            agent.successRate,
+            agent.avgResponseTime,
+            agent.customerRating,
+            agent.performanceScore
+        ]);
+
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 20,
+            head: tableHeaders,
+            body: tableBody,
+            headStyles: { fillColor: [234, 88, 12], textColor: [255, 255, 255] },
+            alternateRowStyles: { fillColor: [252, 250, 248] },
+            margin: { top: 20 },
+            styles: { fontSize: 9 }
+        });
+
+        // 4. Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+            doc.text("Confidential - Atlas Internal Use Only", 14, doc.internal.pageSize.height - 10);
+        }
+
+        doc.save(`Atlas_Performance_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-gray-50/50">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Loading Performance Data...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!performanceData) {
+        return (
+            <div className="p-8 text-center bg-white rounded-2xl border border-gray-100 m-6 shadow-sm">
+                <p className="text-gray-500 font-bold">Failed to load performance reports.</p>
+                <button onClick={fetchPerformanceData} className="mt-4 text-blue-600 font-bold underline">Retry</button>
+            </div>
+        );
+    }
+
+    const { cards, agentDetails } = performanceData;
 
     return (
         <div className="space-y-6">
@@ -25,7 +143,10 @@ export function ManagerPerformancePage() {
                     >
                         <ArrowLeft className="w-4 h-4" /> Back to Dashboard
                     </button>
-                    <button className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 flex items-center gap-2 shadow-lg shadow-blue-100 transition-all text-sm">
+                    <button 
+                        onClick={handleExportReport}
+                        className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 flex items-center gap-2 shadow-lg shadow-blue-100 transition-all text-sm"
+                    >
                         <Download className="w-4 h-4" /> Export Report
                     </button>
                 </div>
@@ -39,8 +160,8 @@ export function ManagerPerformancePage() {
                     </div>
                     <div>
                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Total Agents</p>
-                        <h3 className="text-2xl font-black text-gray-900 leading-none">1</h3>
-                        <p className="text-[10px] font-bold text-green-500 mt-1 flex items-center gap-0.5">↑ Active</p>
+                        <h3 className="text-2xl font-black text-gray-900 leading-none">{cards.totalAgents}</h3>
+                        <p className="text-[10px] font-bold text-green-500 mt-1 flex items-center gap-0.5">↑ {cards.activeAgents} Active</p>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-50 flex items-center gap-4">
@@ -49,7 +170,7 @@ export function ManagerPerformancePage() {
                     </div>
                     <div>
                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Avg Performance</p>
-                        <h3 className="text-2xl font-black text-gray-900 leading-none">87%</h3>
+                        <h3 className="text-2xl font-black text-gray-900 leading-none">{cards.avgPerformance}</h3>
                         <p className="text-[10px] font-bold text-green-500 mt-1 flex items-center gap-0.5">↑ This Month</p>
                     </div>
                 </div>
@@ -59,7 +180,7 @@ export function ManagerPerformancePage() {
                     </div>
                     <div>
                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Top Performer</p>
-                        <h3 className="text-xl font-black text-gray-900 leading-none">Call Center Agent</h3>
+                        <h3 className="text-xl font-black text-gray-900 leading-none truncate max-w-[150px]">{cards.topPerformer}</h3>
                         <p className="text-[10px] font-bold text-yellow-600 mt-1 flex items-center gap-0.5">↑ This Week</p>
                     </div>
                 </div>
@@ -69,7 +190,7 @@ export function ManagerPerformancePage() {
                     </div>
                     <div>
                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Total Orders</p>
-                        <h3 className="text-2xl font-black text-gray-900 leading-none">0</h3>
+                        <h3 className="text-2xl font-black text-gray-900 leading-none">{cards.totalOrders}</h3>
                         <p className="text-[10px] font-bold text-purple-600 mt-1 flex items-center gap-0.5">↑ All Time</p>
                     </div>
                 </div>
@@ -82,9 +203,24 @@ export function ManagerPerformancePage() {
                         <BarChart className="w-5 h-5 text-blue-500" />
                         <h3 className="text-lg font-bold text-gray-800">Performance Trends</h3>
                     </div>
-                    <div className="flex-1 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 flex items-center justify-center flex-col gap-4">
-                        <TrendingUp className="w-12 h-12 text-gray-300" />
-                        <p className="text-sm font-bold text-gray-400 italic">Performance chart will be displayed here</p>
+                    <div className="flex-1 flex flex-col justify-end p-4">
+                        <div className="flex items-end justify-between h-48 gap-2">
+                            {[65, 78, 82, 75, 90, 85, 88].map((val, i) => (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                                    <div 
+                                        className="w-full bg-blue-100 group-hover:bg-blue-500 rounded-t-lg transition-all duration-500 relative"
+                                        style={{ height: `${val}%` }}
+                                    >
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {val}%
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                        {['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-50 min-h-[400px] flex flex-col">
@@ -92,9 +228,23 @@ export function ManagerPerformancePage() {
                         <Layout className="w-5 h-5 text-green-500" />
                         <h3 className="text-lg font-bold text-gray-800">Agent Comparison</h3>
                     </div>
-                    <div className="flex-1 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 flex items-center justify-center flex-col gap-4">
-                        <Table className="w-12 h-12 text-gray-300" />
-                        <p className="text-sm font-bold text-gray-400 italic">Comparison chart will be displayed here</p>
+                    <div className="flex-1 space-y-4 p-4">
+                        {agentDetails.slice(0, 5).map((agent, i) => (
+                            <div key={agent.id} className="space-y-1.5">
+                                <div className="flex justify-between text-[11px] font-bold">
+                                    <span className="text-gray-600">{agent.name}</span>
+                                    <span className="text-blue-600">{agent.successRate}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full transition-all duration-1000 delay-${i * 100} ${
+                                            i === 0 ? 'bg-orange-500' : 'bg-blue-500/70'
+                                        }`}
+                                        style={{ width: agent.successRate }}
+                                    ></div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -126,46 +276,53 @@ export function ManagerPerformancePage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            <tr className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center border border-orange-100">
-                                            <Users className="w-5 h-5 text-orange-500" />
+                            {agentDetails.map((agent) => (
+                                <tr key={agent.id} className="hover:bg-gray-50/50 transition-colors group">
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center border border-orange-100 font-bold text-orange-600">
+                                                {agent.name.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 text-sm">{agent.name}</h4>
+                                                <p className="text-xs font-medium text-gray-400">{agent.email}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-gray-900 text-sm">Call Center Agent</h4>
-                                            <p className="text-xs font-medium text-gray-400">callcenter@atlas.com</p>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className="font-black text-gray-900">{agent.ordersHandled}</span>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 w-24 bg-gray-100 h-2 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="bg-green-500 h-full transition-all duration-500" 
+                                                    style={{ width: agent.successRate }}
+                                                ></div>
+                                            </div>
+                                            <span className="text-xs font-black text-gray-900">{agent.successRate}</span>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className="font-black text-gray-900">0</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1 w-24 bg-gray-100 h-2 rounded-full overflow-hidden">
-                                            <div className="bg-gray-300 h-full w-0"></div>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className="font-bold text-gray-600 text-sm">{agent.avgResponseTime}</span>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-1 text-yellow-400">
+                                            <Star className="w-4 h-4 fill-current" />
+                                            <span className="ml-2 text-sm font-black text-gray-900">{agent.customerRating}</span>
                                         </div>
-                                        <span className="text-xs font-black text-gray-900">0%</span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className="font-bold text-gray-600 text-sm">2.5 min</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex items-center gap-1 text-yellow-400">
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <Star className="w-4 h-4 text-gray-200" />
-                                        <span className="ml-2 text-sm font-black text-gray-900">4.2</span>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <span className="px-4 py-1.5 bg-red-50 text-red-500 rounded-full text-[11px] font-black border border-red-100">10%</span>
-                                </td>
-                            </tr>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className={`px-4 py-1.5 rounded-full text-[11px] font-black border ${
+                                            parseInt(agent.performanceScore) > 70 ? 'bg-green-50 text-green-500 border-green-100' : 
+                                            parseInt(agent.performanceScore) > 40 ? 'bg-yellow-50 text-yellow-600 border-yellow-100' : 
+                                            'bg-red-50 text-red-500 border-red-100'
+                                        }`}>
+                                            {agent.performanceScore}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -180,16 +337,26 @@ export function ManagerPerformancePage() {
                         <h3 className="text-lg font-bold text-gray-800">Top Performers</h3>
                     </div>
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:shadow-md transition-all">
-                            <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center font-black text-yellow-700">1</div>
-                                <div>
-                                    <h4 className="font-bold text-gray-900 text-sm">Call Center Agent</h4>
-                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">0 orders</p>
+                        {[...agentDetails].sort((a, b) => b.perfRaw - a.perfRaw).slice(0, 3).map((agent, idx) => (
+                            <div key={agent.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:shadow-md transition-all">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black ${
+                                        idx === 0 ? 'bg-yellow-100 text-yellow-700' : 
+                                        idx === 1 ? 'bg-gray-200 text-gray-700' : 
+                                        'bg-orange-100 text-orange-700'
+                                    }`}>
+                                        {idx + 1}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-gray-900 text-sm">{agent.name}</h4>
+                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">{agent.ordersHandled} orders</p>
+                                    </div>
                                 </div>
+                                <span className={`text-sm font-black ${
+                                    idx === 0 ? 'text-yellow-600' : 'text-gray-600'
+                                }`}>{agent.performanceScore}</span>
                             </div>
-                            <span className="text-sm font-black text-yellow-600">10%</span>
-                        </div>
+                        ))}
                     </div>
                 </div>
 

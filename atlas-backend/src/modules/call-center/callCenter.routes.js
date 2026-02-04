@@ -18,7 +18,16 @@ router.get('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMI
 // Manager Routes
 router.get('/manager-dashboard', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getDashboardStats);
 router.get('/agents', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getAgents);
-router.get('/performance', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getPerformance);
+router.post('/agents', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.createAgent);
+router.patch('/agents/:id', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.updateAgent);
+router.post('/auto-assign', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.autoAssign);
+router.post('/fix-unassigned', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.fixUnassigned);
+    router.post('/create-test-orders', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.createTestOrders);
+router.get('/manager-orders', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getManagerOrders);
+router.get('/manager-order-stats', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getManagerOrderStats);
+router.patch('/manager-orders/:id', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.updateManagerOrder);
+router.get('/performance-reports', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getPerformanceReports);
+router.get('/order-statistics', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getOrderStatistics);
 
 
 module.exports = router;

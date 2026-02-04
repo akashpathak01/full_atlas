@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { managerDashboardData } from '../../data/managerDummyData';
+import api from '../../lib/api';
 import {
     Home,
     Phone,
@@ -21,31 +21,94 @@ import {
     ChevronRight,
     Search,
     Wrench,
-    Check
+    Check,
+    User
 } from 'lucide-react';
 
 export function ManagerDashboardPage() {
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+    const [loading, setLoading] = useState(true);
+    const [dashboardData, setDashboardData] = useState({
+        user: 'Super Admin',
+        stats: {
+            totalOrders: 0,
+            pendingApproval: 0,
+            activeAgents: 0,
+            approvedToday: 0
+        },
+        ordersAwaitingApproval: [],
+        recentlyApprovedOrders: [],
+        assignedOrders: [],
+        unassignedOrders: []
+    });
     const [isLoading, setIsLoading] = useState({
         autoAssign: false,
-        fixUnassigned: false,
-        createTest: false
+        fixUnassigned: false
     });
 
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/call-center/manager-dashboard');
+            // Transform response if necessary to match the structure expected by render
+            // Backend returns: { stats, awaitingApprovalOrders, recentlyApprovedOrders, assignedOrders, unassignedOrders }
+            // Frontend currently expects: { user, stats, ordersAwaitingApproval, ... }
+            
+            const data = response.data;
+            setDashboardData({
+                user: 'Super Admin', // Could be dynamic if user info is in response
+                stats: data.stats,
+                ordersAwaitingApproval: data.awaitingApprovalOrders || [],
+                recentlyApprovedOrders: data.recentlyApprovedOrders || [],
+                assignedOrders: data.assignedOrders || [],
+                unassignedOrders: data.unassignedOrders || []
+            });
+        } catch (error) {
+            console.error('Failed to fetch dashboard data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
+        fetchDashboardData();
         const timer = setInterval(() => {
             setCurrentTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
         }, 1000);
         return () => clearInterval(timer);
     }, []);
 
-    const handleAction = (action) => {
+    const handleAction = async (action) => {
         setIsLoading(prev => ({ ...prev, [action]: true }));
-        setTimeout(() => {
+        
+        try {
+            let endpoint = '';
+            if (action === 'autoAssign') endpoint = '/call-center/auto-assign';
+            else if (action === 'fixUnassigned') endpoint = '/call-center/fix-unassigned';
+
+            if (endpoint) {
+                const res = await api.post(endpoint);
+                alert(res.data.message);
+                fetchDashboardData();
+            }
+        } catch (error) {
+            console.error(`Error performing ${action}:`, error);
+            alert(`Failed to perform ${action}`);
+        } finally {
             setIsLoading(prev => ({ ...prev, [action]: false }));
-            alert(`${action.charAt(0).toUpperCase() + action.slice(1)} completed successfully!`);
-        }, 1500);
+        }
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+                <div className="flex flex-col items-center">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+                    <p className="text-gray-500 font-medium">Loading Dashboard...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#f8fafc] p-6 space-y-6 font-sans">
@@ -69,7 +132,7 @@ export function ManagerDashboardPage() {
                         <div>
                             <h1 className="text-2xl font-extrabold text-[#1e293b] tracking-tight">Call Center Manager</h1>
                             <p className="text-[#64748b] text-sm mt-0.5 font-medium flex items-center">
-                                Manager: <span className="text-[#334155] ml-1">{managerDashboardData.user}</span>
+                                Manager: <span className="text-[#334155] ml-1">{dashboardData.user}</span>
                             </p>
                         </div>
                     </div>
@@ -96,7 +159,7 @@ export function ManagerDashboardPage() {
                         </div>
                         <div className="text-right">
                             <p className="text-[#64748b] text-xs font-bold uppercase tracking-wider mb-1">Total Orders</p>
-                            <p className="text-3xl font-black text-[#1e293b]">{managerDashboardData.stats.totalOrders}</p>
+                            <p className="text-3xl font-black text-[#1e293b]">{dashboardData.stats.totalOrders}</p>
                         </div>
                     </div>
                 </div>
@@ -109,7 +172,7 @@ export function ManagerDashboardPage() {
                         </div>
                         <div className="text-right">
                             <p className="text-[#64748b] text-xs font-bold uppercase tracking-wider mb-1">Pending Approval</p>
-                            <p className="text-3xl font-black text-[#f97316]">{managerDashboardData.stats.pendingApproval}</p>
+                            <p className="text-3xl font-black text-[#f97316]">{dashboardData.stats.pendingApproval}</p>
                         </div>
                     </div>
                 </div>
@@ -122,7 +185,7 @@ export function ManagerDashboardPage() {
                         </div>
                         <div className="text-right">
                             <p className="text-[#64748b] text-xs font-bold uppercase tracking-wider mb-1">Active Agents</p>
-                            <p className="text-3xl font-black text-[#1e293b]">{managerDashboardData.stats.activeAgents}</p>
+                            <p className="text-3xl font-black text-[#1e293b]">{dashboardData.stats.activeAgents}</p>
                         </div>
                     </div>
                 </div>
@@ -135,7 +198,7 @@ export function ManagerDashboardPage() {
                         </div>
                         <div className="text-right">
                             <p className="text-[#64748b] text-xs font-bold uppercase tracking-wider mb-1">Approved Today</p>
-                            <p className="text-3xl font-black text-[#22c55e]">{managerDashboardData.stats.approvedToday}</p>
+                            <p className="text-3xl font-black text-[#22c55e]">{dashboardData.stats.approvedToday}</p>
                         </div>
                     </div>
                 </div>
@@ -151,26 +214,26 @@ export function ManagerDashboardPage() {
                             <h3 className="font-extrabold tracking-tight">Orders Awaiting Approval</h3>
                         </div>
                         <span className="bg-[#ffedd5] text-[#9a3412] text-[10px] font-black uppercase px-2.5 py-1 rounded-lg">
-                            {managerDashboardData.ordersAwaitingApproval.length} orders
+                            {dashboardData.ordersAwaitingApproval.length} orders
                         </span>
                     </div>
                     <div className="p-6 flex-grow flex flex-col space-y-4">
-                        {managerDashboardData.ordersAwaitingApproval.length > 0 ? (
-                            managerDashboardData.ordersAwaitingApproval.map((order, idx) => (
+                        {dashboardData.ordersAwaitingApproval.length > 0 ? (
+                            dashboardData.ordersAwaitingApproval.map((order, idx) => (
                                 <div key={idx} className="bg-white border border-[#f1f5f9] rounded-2xl p-4 flex items-center justify-between shadow-[0_2px_10px_-3px_rgba(0,0,0,0.04)] hover:border-orange-200 transition-colors">
                                     <div className="flex items-center space-x-4">
                                         <div className="bg-[#fff7ed] p-3 rounded-xl">
                                             <ShoppingCart className="w-6 h-6 text-[#f97316]" />
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-[#1e293b] text-sm">Order {order.id}</h4>
-                                            <p className="text-[#64748b] text-[11px] font-medium mt-0.5">Customer: {order.customer}</p>
-                                            <p className="text-[#94a3b8] text-[10px] mt-0.5 uppercase tracking-wide">Created: {order.created}</p>
+                                            <h4 className="font-black text-[#1e293b] text-sm">Order {order.orderNumber}</h4>
+                                            <p className="text-[#64748b] text-[11px] font-medium mt-0.5">Customer: {order.customerName}</p>
+                                            <p className="text-[#94a3b8] text-[10px] mt-0.5 uppercase tracking-wide">Created: {new Date(order.createdAt).toLocaleDateString()}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-3">
                                         <span className="bg-[#fef9c3] text-[#854d0e] text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-tight">
-                                            {order.status}
+                                            Pending
                                         </span>
                                         <button className="flex items-center space-x-1 px-4 py-2 bg-white border border-[#f97316] text-[#f97316] text-[11px] font-black rounded-lg hover:bg-[#fff7ed] transition-all">
                                             <Settings className="w-3.5 h-3.5" />
@@ -199,15 +262,36 @@ export function ManagerDashboardPage() {
                             <h3 className="font-extrabold tracking-tight">Recently Approved Orders</h3>
                         </div>
                         <span className="bg-[#dcfce7] text-[#166534] text-[10px] font-black uppercase px-2.5 py-1 rounded-lg">
-                            {managerDashboardData.recentlyApprovedOrders.length} today
+                            {dashboardData.recentlyApprovedOrders.length} today
                         </span>
                     </div>
                     <div className="p-6 flex-grow flex flex-col items-center justify-center min-h-[220px]">
-                        <div className="w-16 h-16 bg-[#f1f5f9] rounded-full flex items-center justify-center mb-4 text-[#94a3b8]">
-                            <Clock className="w-8 h-8" />
-                        </div>
-                        <h4 className="text-sm font-black text-[#1e293b]">No Recent Approvals</h4>
-                        <p className="text-xs text-[#64748b] mt-1">No orders have been approved recently</p>
+                         {dashboardData.recentlyApprovedOrders.length > 0 ? (
+                             <div className="w-full space-y-4">
+                                {dashboardData.recentlyApprovedOrders.map((order, idx) => (
+                                    <div key={idx} className="bg-white border border-[#f1f5f9] rounded-2xl p-4 flex items-center justify-between shadow-sm hover:border-green-100 transition-colors w-full">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="bg-[#f0fdf4] p-3 rounded-xl">
+                                                <CheckCircle className="w-6 h-6 text-[#22c55e]" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-black text-[#1e293b] text-sm">Order {order.orderNumber}</h4>
+                                                <p className="text-[#64748b] text-[11px] font-medium mt-0.5">Customer: {order.customerName}</p>
+                                                <p className="text-[#94a3b8] text-[10px] mt-0.5 uppercase tracking-wide">Approved: {new Date(order.approvedAt).toLocaleDateString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+                        ) : (
+                            <>
+                                <div className="w-16 h-16 bg-[#f1f5f9] rounded-full flex items-center justify-center mb-4 text-[#94a3b8]">
+                                    <Clock className="w-8 h-8" />
+                                </div>
+                                <h4 className="text-sm font-black text-[#1e293b]">No Recent Approvals</h4>
+                                <p className="text-xs text-[#64748b] mt-1">No orders have been approved recently</p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -238,14 +322,6 @@ export function ManagerDashboardPage() {
                             <Wrench className="w-3.5 h-3.5" />
                             <span>{isLoading.fixUnassigned ? 'FIXING...' : 'FIX UNASSIGNED ORDERS'}</span>
                         </button>
-                        <button
-                            onClick={() => handleAction('createTest')}
-                            disabled={isLoading.createTest}
-                            className="flex items-center space-x-2 px-5 py-2.5 bg-[#7c3aed] text-white text-[11px] font-black rounded-xl hover:bg-[#6d28d9] shadow-[0_4px_14px_0_rgba(124,58,237,0.39)] transition-all active:scale-95 disabled:opacity-50"
-                        >
-                            <PlusCircle className="w-3.5 h-3.5" />
-                            <span>{isLoading.createTest ? 'CREATING...' : 'CREATE TEST ORDERS'}</span>
-                        </button>
                     </div>
                 </div>
 
@@ -254,11 +330,11 @@ export function ManagerDashboardPage() {
                     <div className="space-y-4">
                         <h4 className="text-[13px] font-black text-[#1e293b] uppercase tracking-wide">Assigned Orders</h4>
                         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                            {managerDashboardData.assignedOrders.length > 0 ? (
-                                managerDashboardData.assignedOrders.map((order, idx) => (
+                            {dashboardData.assignedOrders.length > 0 ? (
+                                dashboardData.assignedOrders.map((order, idx) => (
                                     <div key={idx} className="bg-white border border-[#f1f5f9] rounded-xl p-4 flex items-center justify-between shadow-sm hover:border-blue-100 transition-colors">
                                         <div>
-                                            <h5 className="font-black text-[#1e293b] text-xs">Order {order.id}</h5>
+                                            <h5 className="font-black text-[#1e293b] text-xs">Order {order.orderNumber}</h5>
                                             <div className="flex items-center mt-1 text-[10px] text-[#64748b] font-medium opacity-80">
                                                 <span>Customer: {order.customer}</span>
                                                 <span className="mx-2">•</span>
@@ -267,7 +343,7 @@ export function ManagerDashboardPage() {
                                         </div>
                                         <div className="flex items-center space-x-3">
                                             <span className="bg-[#ebf5ff] text-[#1d4ed8] text-[9px] font-black px-2 py-0.5 rounded-lg uppercase tracking-tight">
-                                                {order.status}
+                                                {order.status || 'ASSIGNED'}
                                             </span>
                                             <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse"></div>
                                         </div>
@@ -286,11 +362,11 @@ export function ManagerDashboardPage() {
                     <div className="space-y-4">
                         <h4 className="text-[13px] font-black text-[#1e293b] uppercase tracking-wide">Unassigned Orders</h4>
                         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                            {managerDashboardData.unassignedOrders.length > 0 ? (
-                                managerDashboardData.unassignedOrders.map((order, idx) => (
+                            {dashboardData.unassignedOrders.length > 0 ? (
+                                dashboardData.unassignedOrders.map((order, idx) => (
                                     <div key={idx} className="bg-[#fffbeb] border border-[#fef3c7] rounded-xl p-4 flex items-center justify-between shadow-sm hover:border-[#fde68a] transition-colors">
                                         <div>
-                                            <h5 className="font-black text-[#854d0e] text-xs">Order {order.id}</h5>
+                                            <h5 className="font-black text-[#854d0e] text-xs">Order {order.orderNumber}</h5>
                                             <p className="text-[#92400e] text-[10px] font-medium mt-1 opacity-70">
                                                 Customer: {order.customer} <br />
                                                 <span className="text-[9px] opacity-60 uppercase tracking-tighter">Created: {order.created}</span>

@@ -1,39 +1,72 @@
 
-import React, { useState } from 'react';
-import { managerOrdersData } from '../../data/managerDummyData';
-import { Home, List, ShoppingCart, Clock, Settings, CheckCircle, Users, DollarSign, Filter, Search, X, Eye, Edit, Save, ArrowLeft, Package, User, Phone, MapPin, Tag, Info } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
+import { Home, List, ShoppingCart, Clock, Settings, CheckCircle, Users, DollarSign, Filter, Search, X, Eye, Edit, Save, ArrowLeft, Package, User, Phone, MapPin, Tag, Info, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function ManagerOrdersPage() {
     const navigate = useNavigate();
-    const [orders, setOrders] = useState(managerOrdersData.orders);
-    const [filteredOrders, setFilteredOrders] = useState(managerOrdersData.orders);
+    const [orders, setOrders] = useState([]);
+    const [stats, setStats] = useState({
+        totalOrders: 0,
+        pending: 0,
+        processing: 0,
+        completed: 0,
+        activeAgents: 0,
+        todaysRevenue: 0
+    });
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All Statuses');
+    const [agentFilter, setAgentFilter] = useState('All Agents'); // Added agent filter state
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false); // Collapsible panel state
+    const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
 
-    const handleFilter = () => {
-        let result = orders;
-        if (searchTerm) {
-            result = result.filter(order =>
-                order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                order.customer.toLowerCase().includes(searchTerm.toLowerCase())
-            );
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [statsRes, ordersRes] = await Promise.all([
+                api.get('/call-center/manager-order-stats'),
+                api.get('/call-center/manager-orders', {
+                    params: {
+                        search: searchTerm,
+                        status: statusFilter,
+                        agentId: agentFilter
+                    }
+                })
+            ]);
+            setStats(statsRes.data);
+            setOrders(ordersRes.data);
+        } catch (error) {
+            console.error('Failed to fetch orders data:', error);
+        } finally {
+            setLoading(false);
         }
-        if (statusFilter !== 'All Statuses') {
-            result = result.filter(order => order.status === statusFilter);
-        }
-        setFilteredOrders(result);
-        setIsFilterPanelOpen(false); // Close panel on apply
     };
+
+    // Debounce search to avoid too many API calls
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            fetchData();
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchTerm, statusFilter, agentFilter]);
+
+    // Initial load
+    useEffect(() => {
+        // fetchData is called by the debounce effect initially too if deps change, 
+        // but we might want an explicit immediate load or just rely on the effect.
+        // relying on effect is fine.
+    }, []);
 
     const handleClearFilters = () => {
         setSearchTerm('');
         setStatusFilter('All Statuses');
-        setFilteredOrders(orders);
+        setAgentFilter('All Agents');
     };
 
     const handleView = (order) => {
@@ -42,19 +75,44 @@ export function ManagerOrdersPage() {
     };
 
     const handleEdit = (order) => {
-        setSelectedOrder({ ...order });
+        setSelectedOrder({ ...order }); // Clone order for editing
         setShowEditModal(true);
     };
 
-    const handleUpdateOrder = () => {
-        setOrders(orders.map(o => o.id === selectedOrder.id ? selectedOrder : o));
-        setFilteredOrders(filteredOrders.map(o => o.id === selectedOrder.id ? selectedOrder : o));
-        setShowEditModal(false);
-        alert('Order updated successfully!');
+    const handleUpdateOrder = async () => {
+        if (!selectedOrder) return;
+        setIsUpdating(true);
+        try {
+            await api.patch(`/call-center/manager-orders/${selectedOrder.id}`, {
+                status: selectedOrder.status,
+                agentId: selectedOrder.callCenterAgentId || selectedOrder.agentId || (selectedOrder.callCenterAgent ? selectedOrder.callCenterAgent.id : null), // Handle agent selection logic properly
+                amount: selectedOrder.totalAmount || selectedOrder.amount, // backend expects 'amount'
+                managerNotes: selectedOrder.managerNotes // backend expects 'managerNotes'
+            });
+            setShowEditModal(false);
+            alert('Order updated successfully!');
+            fetchData(); // Refresh list
+        } catch (error) {
+            console.error('Update failed:', error);
+            alert('Failed to update order');
+        } finally {
+            setIsUpdating(false);
+        }
     };
 
+    if (loading && orders.length === 0) {
+         return (
+            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+                <div className="flex flex-col items-center">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+                    <p className="text-gray-500 font-medium">Loading Orders...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="space-y-6 relative">
+        <div className="space-y-6 relative min-h-screen bg-[#f8fafc] p-6">
             {/* Breadcrumb */}
             <div className="flex items-center text-sm text-gray-500">
                 <Home className="w-4 h-4 mr-2" />
@@ -99,7 +157,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Total Orders</p>
-                        <h3 className="text-xl font-bold text-gray-900">{managerOrdersData.stats.totalOrders}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{stats.totalOrders}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -108,7 +166,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Pending</p>
-                        <h3 className="text-xl font-bold text-gray-900">{managerOrdersData.stats.pending}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{stats.pending}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -117,7 +175,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Processing</p>
-                        <h3 className="text-xl font-bold text-gray-900">{managerOrdersData.stats.processing}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{stats.processing}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -126,7 +184,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Completed</p>
-                        <h3 className="text-xl font-bold text-gray-900">{managerOrdersData.stats.completed}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{stats.completed}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -135,7 +193,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Active Agents</p>
-                        <h3 className="text-xl font-bold text-gray-900">{managerOrdersData.stats.activeAgents}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{stats.activeAgents}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -144,7 +202,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Today's Revenue</p>
-                        <h3 className="text-xl font-bold text-gray-900">{managerOrdersData.stats.todaysRevenue}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">AED {stats.todaysRevenue}</h3>
                     </div>
                 </div>
             </div>
@@ -190,26 +248,20 @@ export function ManagerOrdersPage() {
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1">Agent</label>
-                            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                                value={agentFilter}
+                                onChange={(e) => setAgentFilter(e.target.value)}
+                            >
                                 <option>All Agents</option>
+                                {/* Agents could be fetched dynamically too, but sticking to basics for now */}
+                                <option value="Unassigned">Unassigned</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">Date Range</label>
-                            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
-                                <option>All Dates</option>
-                            </select>
-                        </div>
+                         {/* Date range omitted for simplicity unless requested */}
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                        <button
-                            onClick={handleFilter}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg flex items-center text-sm font-medium shadow-sm transition-all active:scale-95"
-                        >
-                            <Search className="w-4 h-4 mr-2" />
-                            Apply Filters
-                        </button>
+                        {/* Apply is handled by effects, but we can keep button for explicit feel or complex filters */}
                         <button
                             onClick={handleClearFilters}
                             className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-5 py-2 rounded-lg flex items-center text-sm font-medium shadow-sm transition-all active:scale-95"
@@ -229,7 +281,7 @@ export function ManagerOrdersPage() {
                     </div>
                     <div>
                         <h3 className="text-lg font-bold text-gray-900">Orders List</h3>
-                        <p className="text-xs text-gray-500">Showing {filteredOrders.length} orders</p>
+                        <p className="text-xs text-gray-500">Showing {orders.length} orders</p>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -245,31 +297,32 @@ export function ManagerOrdersPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {filteredOrders.length > 0 ? (
-                                filteredOrders.map((order, idx) => (
+                            {orders.length > 0 ? (
+                                orders.map((order, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="font-bold text-gray-900">{order.id}</div>
-                                            <div className="text-xs text-gray-500">{order.amount}</div>
+                                            <div className="font-bold text-gray-900">{order.orderNumber || order.id}</div>
+                                            <div className="text-xs text-gray-500">{order.totalAmount ? `AED ${order.totalAmount}` : 'AED 0'}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="font-bold text-gray-900">{order.customer}</div>
-                                            <div className="text-xs text-gray-500">{order.customerPhone}</div>
+                                            <div className="font-bold text-gray-900">{order.customerName || (order.customer ? order.customer.name : 'Unknown')}</div>
+                                            <div className="text-xs text-gray-500">{order.customer ? order.customer.contactNumber : 'No Contact'}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${order.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                                                order.status === 'Cancelled' ? 'bg-red-100 text-red-800' :
-                                                    'bg-yellow-100 text-yellow-800'
-                                                }`}>
+                                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                                                order.status === 'COMPLETED' || order.status === 'CONFIRMED' || order.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                                order.status === 'REJECTED' || order.status === 'Cancelled' ? 'bg-red-100 text-red-800' :
+                                                'bg-yellow-100 text-yellow-800'
+                                            }`}>
                                                 {order.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-gray-600 italic">
-                                            {order.agent}
+                                            {order.callCenterAgent ? order.callCenterAgent.name : 'Unassigned'}
                                         </td>
                                         <td className="px-6 py-4 text-xs text-gray-500">
-                                            <div className="font-medium">{order.created.split(' ')[0]} {order.created.split(' ')[1]} {order.created.split(' ')[2]}</div>
-                                            <div className="text-gray-400">{order.created.split(' ')[3]}</div>
+                                            <div className="font-medium">{new Date(order.createdAt).toLocaleDateString()}</div>
+                                            <div className="text-gray-400">{new Date(order.createdAt).toLocaleTimeString()}</div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center space-x-2">
@@ -279,7 +332,12 @@ export function ManagerOrdersPage() {
                                                 >
                                                     <Eye className="w-3 h-3 mr-1" /> View
                                                 </button>
-                                                {/* Edit hidden - Order statistics should be read-only for managers */}
+                                                <button
+                                                    onClick={() => handleEdit(order)}
+                                                    className="flex items-center px-3 py-1 bg-green-50 text-green-600 text-xs font-bold rounded border border-green-200 hover:bg-green-100 transition-all active:scale-95"
+                                                >
+                                                    <Edit className="w-3 h-3 mr-1" /> Edit
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -308,7 +366,7 @@ export function ManagerOrdersPage() {
                                     <ShoppingCart className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-bold text-gray-800">Order Details - {selectedOrder.id}</h2>
+                                    <h2 className="text-xl font-bold text-gray-800">Order Details - {selectedOrder.orderNumber || selectedOrder.id}</h2>
                                     <p className="text-xs text-gray-500 mt-0.5">Full transaction information and status history</p>
                                 </div>
                             </div>
@@ -322,9 +380,9 @@ export function ManagerOrdersPage() {
                                             <User className="w-3 h-3 mr-1.5" /> Customer Information
                                         </h4>
                                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                            <p className="text-sm font-bold text-gray-900">{selectedOrder.customer}</p>
-                                            <p className="text-xs text-gray-500 mt-1 flex items-center"><Phone className="w-3 h-3 mr-1.5" /> {selectedOrder.customerPhone}</p>
-                                            <p className="text-xs text-gray-500 mt-1 flex items-center"><MapPin className="w-3 h-3 mr-1.5" /> Block 4, Industrial Area, Dubai</p>
+                                            <p className="text-sm font-bold text-gray-900">{selectedOrder.customerName || (selectedOrder.customer ? selectedOrder.customer.name : 'Unknown')}</p>
+                                            <p className="text-xs text-gray-500 mt-1 flex items-center"><Phone className="w-3 h-3 mr-1.5" /> {selectedOrder.customer ? selectedOrder.customer.contactNumber : 'N/A'}</p>
+                                            <p className="text-xs text-gray-500 mt-1 flex items-center"><MapPin className="w-3 h-3 mr-1.5" /> {selectedOrder.deliveryAddress || 'No Address'}</p>
                                         </div>
                                     </div>
                                     <div>
@@ -334,11 +392,7 @@ export function ManagerOrdersPage() {
                                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                                             <div className="flex justify-between items-center text-xs">
                                                 <span className="text-gray-500">Handling Agent:</span>
-                                                <span className="font-bold text-gray-900">{selectedOrder.agent}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-xs mt-2">
-                                                <span className="text-gray-500">Service Group:</span>
-                                                <span className="font-bold text-gray-900">Alpha Support</span>
+                                                <span className="font-bold text-gray-900">{selectedOrder.callCenterAgent ? selectedOrder.callCenterAgent.name : 'Unassigned'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -351,7 +405,7 @@ export function ManagerOrdersPage() {
                                         <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100">
                                             <div className="flex justify-between items-center text-xs">
                                                 <span className="text-gray-500">Total Amount:</span>
-                                                <span className="text-lg font-black text-blue-700">{selectedOrder.amount}</span>
+                                                <span className="text-lg font-black text-blue-700">AED {selectedOrder.totalAmount || selectedOrder.amount}</span>
                                             </div>
                                             <div className="flex justify-between items-center text-xs mt-3">
                                                 <span className="text-gray-500">Current Status:</span>
@@ -359,13 +413,9 @@ export function ManagerOrdersPage() {
                                             </div>
                                             <div className="flex justify-between items-center text-xs mt-2">
                                                 <span className="text-gray-500">Created At:</span>
-                                                <span className="text-gray-700 font-medium">{selectedOrder.created}</span>
+                                                <span className="text-gray-700 font-medium">{new Date(selectedOrder.createdAt).toLocaleString()}</span>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="p-4 border border-dashed border-gray-200 rounded-xl text-center">
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Internal Note</p>
-                                        <p className="text-xs italic text-gray-500">"Customer requested priority shipping for this item."</p>
                                     </div>
                                 </div>
                             </div>
@@ -386,7 +436,7 @@ export function ManagerOrdersPage() {
                                 <div className="p-2 bg-green-100 rounded-lg mr-3">
                                     <Edit className="w-5 h-5 text-green-600" />
                                 </div>
-                                <h2 className="text-xl font-bold text-gray-800">Edit Order - {selectedOrder.id}</h2>
+                                <h2 className="text-xl font-bold text-gray-800">Edit Order - {selectedOrder.orderNumber || selectedOrder.id}</h2>
                             </div>
                             <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-white rounded-full transition-all text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
                         </div>
@@ -398,6 +448,11 @@ export function ManagerOrdersPage() {
                                     onChange={(e) => setSelectedOrder({ ...selectedOrder, status: e.target.value })}
                                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all outline-none font-bold text-gray-700"
                                 >
+                                    <option>PENDING_REVIEW</option>
+                                    <option>IN_PROGRESS</option>
+                                    <option>CONFIRMED</option>
+                                    <option>COMPLETED</option>
+                                    <option>REJECTED</option>
                                     <option>Pending</option>
                                     <option>Processing</option>
                                     <option>Completed</option>
@@ -406,36 +461,48 @@ export function ManagerOrdersPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Assign To Agent</label>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Assign To Agent (ID)</label>
+                                    {/* Ideally this would be a dropdown of agents fetched from API, using text input for ID or name for now or static unassigned */}
                                     <select
-                                        value={selectedOrder.agent}
-                                        onChange={(e) => setSelectedOrder({ ...selectedOrder, agent: e.target.value })}
+                                        value={selectedOrder.callCenterAgentId || (selectedOrder.callCenterAgent ? selectedOrder.callCenterAgent.id : '') || 'Unassigned'}
+                                        onChange={(e) => {
+                                            // Handle special 'Unassigned' case
+                                            const val = e.target.value;
+                                            setSelectedOrder({ ...selectedOrder, callCenterAgentId: val === 'Unassigned' ? null : val });
+                                        }}
                                         className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all outline-none font-medium text-gray-700"
                                     >
-                                        <option>Call Center Agent</option>
-                                        <option>Unassigned</option>
-                                        <option>Agent Smith</option>
-                                        <option>Agent Johnson</option>
+                                        <option value="Unassigned">Unassigned</option>
+                                        {/* In a real app we map available agents here. For now allowing Unassigned or keeping current. */}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Total Amount</label>
                                     <input
-                                        type="text"
-                                        value={selectedOrder.amount}
-                                        onChange={(e) => setSelectedOrder({ ...selectedOrder, amount: e.target.value })}
+                                        type="number"
+                                        value={selectedOrder.totalAmount || selectedOrder.amount}
+                                        onChange={(e) => setSelectedOrder({ ...selectedOrder, totalAmount: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all outline-none font-black text-blue-600"
                                     />
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Manager Notes</label>
-                                <textarea rows="3" placeholder="Add any operational notes here..." className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all resize-none"></textarea>
+                                <textarea 
+                                    rows="3" 
+                                    placeholder="Add any operational notes here..." 
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all resize-none"
+                                    value={selectedOrder.managerNotes || ''}
+                                    onChange={(e) => setSelectedOrder({ ...selectedOrder, managerNotes: e.target.value })}
+                                ></textarea>
                             </div>
                         </div>
                         <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
                             <button onClick={() => setShowEditModal(false)} className="px-6 py-2  text-sm font-bold text-gray-400 hover:text-gray-600 transition-all">Discard Changes</button>
-                            <button onClick={handleUpdateOrder} className="px-10 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 active:scale-95 transition-all shadow-lg border-b-2 border-green-800 flex items-center"><Save className="w-4 h-4 mr-2" /> Commit Changes</button>
+                            <button onClick={handleUpdateOrder} disabled={isUpdating} className="px-10 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 active:scale-95 transition-all shadow-lg border-b-2 border-green-800 flex items-center">
+                                {isUpdating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} 
+                                {isUpdating ? 'Saving...' : 'Commit Changes'}
+                            </button>
                         </div>
                     </div>
                 </div>

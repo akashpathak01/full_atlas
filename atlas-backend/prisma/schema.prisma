@@ -28,6 +28,7 @@ model User {
   packagingTasks   PackagingTask[]
   deliveryTasks    DeliveryTask[]
   callNotes        CallNote[]
+  assignedOrders   Order[]         @relation("CallCenterAgent")
   adminProducts    Product[]       @relation("ProductAdmin")
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
@@ -137,6 +138,8 @@ model Order {
   packagingTask   PackagingTask?
   deliveryTask    DeliveryTask?
   callNotes       CallNote[]
+  callCenterAgentId Int?
+  callCenterAgent User?          @relation("CallCenterAgent", fields: [callCenterAgentId], references: [id])
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 }

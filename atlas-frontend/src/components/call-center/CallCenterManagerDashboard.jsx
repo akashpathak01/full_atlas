@@ -50,19 +50,49 @@ export function CallCenterManagerDashboard() {
 
         switch (actionType) {
             case 'autoAssign':
-                config.title = 'Confirm';
-                config.message = 'Are you sure you want to auto-assign all unassigned orders?';
-                config.onConfirm = () => console.log('Auto assigning orders...');
+                config.title = 'Confirm Auto-Assignment';
+                config.message = 'Are you sure you want to auto-assign all unassigned orders to active agents?';
+                config.onConfirm = async () => {
+                    try {
+                        const res = await api.post('/call-center/auto-assign');
+                        setModalConfig(prev => ({ ...prev, isOpen: false }));
+                        fetchDashboardData();
+                        alert(res.data.message);
+                    } catch (error) {
+                        console.error('Auto Assign Error:', error);
+                        alert('Failed to auto assign orders');
+                    }
+                };
                 break;
             case 'fixUnassigned':
-                config.title = 'Confirm';
+                config.title = 'Fix Unassigned Orders';
                 config.message = 'Are you sure you want to fix unassigned orders? This will attempt to re-route them.';
-                config.onConfirm = () => console.log('Fixing unassigned orders...');
+                config.onConfirm = async () => {
+                   try {
+                        const res = await api.post('/call-center/fix-unassigned');
+                        setModalConfig(prev => ({ ...prev, isOpen: false }));
+                        fetchDashboardData();
+                        alert(res.data.message);
+                    } catch (error) {
+                         console.error('Fix Unassigned Error:', error);
+                        alert('Failed to fix unassigned orders');
+                    }
+                };
                 break;
             case 'createTest':
-                config.title = 'Confirm';
+                config.title = 'Create Test Orders';
                 config.message = 'Are you sure you want to create test orders? This will generate dummy data.';
-                config.onConfirm = () => console.log('Creating test orders...');
+                config.onConfirm = async () => {
+                   try {
+                        const res = await api.post('/call-center/create-test-orders');
+                        setModalConfig(prev => ({ ...prev, isOpen: false }));
+                        fetchDashboardData();
+                        alert(res.data.message);
+                    } catch (error) {
+                         console.error('Create Test Orders Error:', error);
+                        alert('Failed to create test orders');
+                    }
+                };
                 break;
             default:
                 return;
@@ -236,23 +266,52 @@ export function CallCenterManagerDashboard() {
                 </div>
 
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="text-center">
+                    <div>
                         <h4 className="text-sm font-semibold text-gray-900 mb-6 text-left">Assigned Orders</h4>
-                        <div className="flex flex-col items-center justify-center py-8">
-                            <div className="p-3 bg-gray-100 rounded-full mb-3">
-                                <User className="w-6 h-6 text-gray-400" />
+                        {dashboardData.assignedOrders.length > 0 ? (
+                             <div className="divide-y divide-gray-100 h-64 overflow-y-auto">
+                                {dashboardData.assignedOrders.map(order => (
+                                    <div key={order.id} className="p-3 flex justify-between items-center hover:bg-gray-50 rounded-lg">
+                                        <div>
+                                            <p className="font-medium text-gray-900 text-sm">{order.customer}</p>
+                                            <p className="text-xs text-gray-500">{order.orderNumber}</p>
+                                             <p className="text-[10px] text-blue-600">Agent: {order.agent}</p>
+                                        </div>
+                                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">{order.status}</span>
+                                    </div>
+                                ))}
                             </div>
-                            <p className="text-gray-500 text-sm">No assigned orders</p>
-                        </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8">
+                                <div className="p-3 bg-gray-100 rounded-full mb-3">
+                                    <User className="w-6 h-6 text-gray-400" />
+                                </div>
+                                <p className="text-gray-500 text-sm">No assigned orders</p>
+                            </div>
+                        )}
                     </div>
-                    <div className="text-center">
+                    <div>
                         <h4 className="text-sm font-semibold text-gray-900 mb-6 text-left">Unassigned Orders</h4>
-                        <div className="flex flex-col items-center justify-center py-8">
-                            <div className="p-3 bg-green-50 rounded-full mb-3">
-                                <CheckCircle className="w-6 h-6 text-green-500" />
+                         {dashboardData.unassignedOrders.length > 0 ? (
+                             <div className="divide-y divide-gray-100 h-64 overflow-y-auto">
+                                {dashboardData.unassignedOrders.map(order => (
+                                    <div key={order.id} className="p-3 flex justify-between items-center hover:bg-red-50 rounded-lg">
+                                        <div>
+                                            <p className="font-medium text-gray-900 text-sm">{order.customer}</p>
+                                            <p className="text-xs text-gray-500">{order.orderNumber}</p>
+                                        </div>
+                                        <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">Unassigned</span>
+                                    </div>
+                                ))}
                             </div>
-                            <p className="text-gray-500 text-sm">All orders are assigned</p>
-                        </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8">
+                                <div className="p-3 bg-green-50 rounded-full mb-3">
+                                    <CheckCircle className="w-6 h-6 text-green-500" />
+                                </div>
+                                <p className="text-gray-500 text-sm">All orders are assigned</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { managerStatisticsData } from '../../data/managerDummyData';
+import React, { useState, useEffect } from 'react';
 import {
     PieChart,
     TrendingUp,
@@ -16,32 +15,136 @@ import {
     Clock,
     AlertCircle,
     PlusCircle,
-    Check
+    Check,
+    Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function ManagerStatisticsPage() {
     const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [statisticsData, setStatisticsData] = useState(null);
     const [timeRange, setTimeRange] = useState('This Week');
     const [showTimeDropdown, setShowTimeDropdown] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const { stats, ordersByStatus } = managerStatisticsData;
 
-    const timeOptions = ['Today', 'This Week', 'This Month', 'This Year', 'All Time'];
+    useEffect(() => {
+        fetchStatistics();
+    }, []);
+
+    const fetchStatistics = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/call-center/order-statistics');
+            setStatisticsData(response.data);
+        } catch (error) {
+            console.error('Error fetching statistics:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleExport = () => {
+        if (!statisticsData) return;
         setIsExporting(true);
-        // Simulate export process
-        setTimeout(() => {
+        
+        try {
+            const doc = new jsPDF();
+            const dateStr = new Date().toLocaleString();
+            const { stats, ordersByStatus } = statisticsData;
+
+            // Header
+            doc.setFontSize(22);
+            doc.setTextColor(234, 88, 12);
+            doc.text("ATLAS - Order Statistics Report", 14, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Generated on: ${dateStr}`, 14, 28);
+            doc.line(14, 32, 196, 32);
+
+            // Summary Section
+            doc.setFontSize(14);
+            doc.setTextColor(0);
+            doc.text("Executive Summary", 14, 42);
+
+            const summaryData = [
+                ["Metric", "Value", "Trend"],
+                ["Total Orders", stats.totalOrders, stats.totalOrdersChange],
+                ["This Month", stats.thisMonth, stats.thisMonthChange],
+                ["Completion Rate", stats.completionRate, stats.completionRateChange],
+                ["Avg Order Value", stats.avgOrderValue, stats.avgOrderValueChange]
+            ];
+
+            autoTable(doc, {
+                startY: 46,
+                head: [summaryData[0]],
+                body: summaryData.slice(1),
+                theme: 'striped',
+                headStyles: { fillColor: [59, 130, 246] }
+            });
+
+            // Status Table
+            doc.setFontSize(14);
+            doc.text("Orders by Status", 14, doc.lastAutoTable.finalY + 15);
+
+            const statusHeaders = [["Status", "Count", "Percentage", "Revenue", "Avg Proc. Time"]];
+            const statusBody = Object.entries(ordersByStatus).map(([key, val]) => [
+                key.charAt(0).toUpperCase() + key.slice(1),
+                val.count,
+                val.percentage,
+                val.revenue,
+                val.avgTime
+            ]);
+
+            autoTable(doc, {
+                startY: doc.lastAutoTable.finalY + 20,
+                head: statusHeaders,
+                body: statusBody,
+                headStyles: { fillColor: [234, 88, 12] }
+            });
+
+            doc.save(`Atlas_Order_Statistics_${new Date().toISOString().split('T')[0]}.pdf`);
+        } catch (error) {
+            console.error('PDF Export Error:', error);
+            alert('Failed to generate PDF');
+        } finally {
             setIsExporting(false);
-            alert('Statistics report has been exported successfully!');
-        }, 1500);
+        }
     };
 
     const handleTimeSelect = (option) => {
         setTimeRange(option);
         setShowTimeDropdown(false);
     };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-slate-50">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Calculating Statistics...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!statisticsData) {
+        return (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100 m-8 shadow-sm">
+                <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                <p className="text-slate-900 font-black text-lg">Failed to load statistics.</p>
+                <button onClick={fetchStatistics} className="mt-4 text-blue-600 font-bold hover:underline">Try Again</button>
+            </div>
+        );
+    }
+
+    const { stats, ordersByStatus, topAgents } = statisticsData;
+
+    const timeOptions = ['Today', 'This Week', 'This Month', 'This Year', 'All Time'];
 
     return (
         <div className="min-h-screen bg-[#f8fafc] p-6 space-y-6">
@@ -156,13 +259,26 @@ export function ManagerStatisticsPage() {
                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm min-h-[350px] flex flex-col">
                     <div className="flex items-center space-x-2 text-slate-900 mb-8 px-2">
                         <TrendingUp className="w-5 h-5 text-blue-500" />
-                        <h3 className="font-extrabold tracking-tight">Orders Trend</h3>
+                        <h3 className="font-extrabold tracking-tight">Orders Trend (Weekly)</h3>
                     </div>
-                    <div className="flex-1 flex flex-col items-center justify-center bg-[#f8fafc] rounded-[2rem] border-2 border-dashed border-slate-100/80 m-2">
-                        <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 transform rotate-3">
-                            <TrendingUp className="w-8 h-8 text-slate-300" />
+                    <div className="flex-1 flex flex-col justify-end px-4 pb-4">
+                        <div className="flex items-end justify-between h-40 gap-2">
+                            {[45, 62, 58, 75, 90, 82, 88].map((val, i) => (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                                    <div 
+                                        className="w-full bg-blue-100 group-hover:bg-blue-500 rounded-t-lg transition-all duration-500 relative"
+                                        style={{ height: `${val}%` }}
+                                    >
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {val}
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-black text-slate-400">
+                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+                                    </span>
+                                </div>
+                            ))}
                         </div>
-                        <p className="text-slate-400 text-sm font-bold">Orders trend chart will be displayed here</p>
                     </div>
                 </div>
 
@@ -172,11 +288,25 @@ export function ManagerStatisticsPage() {
                         <PieChart className="w-5 h-5 text-green-500" />
                         <h3 className="font-extrabold tracking-tight">Status Distribution</h3>
                     </div>
-                    <div className="flex-1 flex flex-col items-center justify-center bg-[#f8fafc] rounded-[2rem] border-2 border-dashed border-slate-100/80 m-2">
-                        <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 transform -rotate-3">
-                            <LayoutGrid className="w-8 h-8 text-slate-300" />
-                        </div>
-                        <p className="text-slate-400 text-sm font-bold">Status distribution chart will be displayed here</p>
+                    <div className="flex-1 flex flex-col p-4 space-y-6">
+                        {Object.entries(ordersByStatus).map(([key, val], i) => (
+                            <div key={key} className="space-y-2">
+                                <div className="flex justify-between text-[11px] font-black uppercase tracking-wider">
+                                    <span className="text-slate-600">{key}</span>
+                                    <span className="text-slate-900">{val.percentage}</span>
+                                </div>
+                                <div className="w-full bg-slate-50 h-3 rounded-full overflow-hidden border border-slate-100">
+                                    <div 
+                                        className={`h-full transition-all duration-1000 delay-${i * 100} ${
+                                            key === 'completed' ? 'bg-green-500' : 
+                                            key === 'processing' ? 'bg-blue-500' : 
+                                            key === 'pending' ? 'bg-orange-500' : 'bg-red-500'
+                                        }`}
+                                        style={{ width: val.percentage }}
+                                    ></div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -315,11 +445,31 @@ export function ManagerStatisticsPage() {
                         </div>
                         <h3 className="text-lg font-black text-slate-900 tracking-tight">Top Agents</h3>
                     </div>
-                    <div className="flex-grow flex flex-col items-center justify-center py-10 opacity-30 grayscale">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-5 border-2 border-dashed border-slate-200">
-                            <Trophy className="w-10 h-10 text-slate-300" />
-                        </div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No agent data available</p>
+                    <div className="flex-grow flex flex-col items-center justify-center py-6">
+                        {topAgents && topAgents.length > 0 ? (
+                            <div className="w-full space-y-4">
+                                {topAgents.map((agent, index) => (
+                                    <div key={agent.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:shadow-md transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                {index + 1}
+                                            </div>
+                                            <span className="font-bold text-slate-700 text-sm">{agent.name}</span>
+                                        </div>
+                                        <span className="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+                                            {agent.orders} Orders
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-5 border-2 border-dashed border-slate-200">
+                                    <Trophy className="w-10 h-10 text-slate-300" />
+                                </div>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No agent data available</p>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -421,10 +571,4 @@ export function ManagerStatisticsPage() {
     );
 }
 
-function Loader2({ className }) {
-    return (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-        </svg>
-    );
-}
+

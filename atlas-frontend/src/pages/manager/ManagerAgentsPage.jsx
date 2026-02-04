@@ -1,29 +1,103 @@
 
-import React, { useState } from 'react';
-import { managerAgentsData } from '../../data/managerDummyData';
-import { Home, Phone, UserPlus, Search, Filter, MoreVertical, Mail, Activity, BarChart2, X, User, MapPin, Calendar, Star, Users, ArrowLeft, CheckCircle2, Info, Edit, ShoppingBag, CheckCircle, Clock, Percent, LayoutGrid, Plus, BarChart3, ExternalLink, RefreshCcw, Send } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
+import { Home, Phone, UserPlus, Search, Filter, MoreVertical, Mail, Activity, BarChart2, X, User, MapPin, Calendar, Star, Users, ArrowLeft, CheckCircle2, Info, Edit, ShoppingBag, CheckCircle, Clock, Percent, LayoutGrid, Plus, BarChart3, ExternalLink, RefreshCcw, Send, Loader2 } from 'lucide-react';
+
+import { useNavigate } from 'react-router-dom';
 
 export function ManagerAgentsPage() {
+    const navigate = useNavigate();
+    const [agents, setAgents] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [view, setView] = useState('list'); // 'list' or 'details'
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
 
     // Modal states
-    const [showAddAgentModal, setShowAddAgentModal] = useState(false);
+    const [showAgentModal, setShowAgentModal] = useState(false);
+    const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
     const [selectedAgent, setSelectedAgent] = useState(null);
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        status: 'Active'
+    });
+
+    useEffect(() => {
+        fetchAgents();
+    }, []);
+
+    const fetchAgents = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/call-center/agents');
+            setAgents(response.data);
+        } catch (error) {
+            console.error('Error fetching agents:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Filter agents based on search and status
-    const filteredAgents = managerAgentsData.filter(agent => {
+    const filteredAgents = agents.filter(agent => {
         const matchesSearch = agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             agent.email.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = statusFilter === 'All' || agent.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
 
-    const handleAddAgent = (e) => {
+    const openAddModal = () => {
+        setModalMode('add');
+        setFormData({ name: '', email: '', phone: '', status: 'Active', password: '' });
+        setShowAgentModal(true);
+    };
+
+    const openEditModal = (agent) => {
+        setModalMode('edit');
+        // If agent is null (called from quick actions), use selectedAgent
+        const targetAgent = agent || selectedAgent; 
+        setFormData({
+            name: targetAgent.name,
+            email: targetAgent.email,
+            phone: targetAgent.phone === 'Not Provided' ? '' : targetAgent.phone,
+            status: targetAgent.status,
+            password: '' // Reset password for edit (usually handled separately if needed)
+        });
+        if (agent) setSelectedAgent(agent); // Update selected if clicked from list
+        setShowAgentModal(true);
+    };
+
+    const handleAgentSubmit = async (e) => {
         e.preventDefault();
-        alert("New Agent Added Successfully! (Simulation)");
-        setShowAddAgentModal(false);
+        setLoading(true);
+        console.log("Submitting agent data:", formData, "Mode:", modalMode);
+        try {
+            if (modalMode === 'edit') {
+                if (!selectedAgent?.id) {
+                    throw new Error("Missing agent ID for update");
+                }
+                const response = await api.patch(`/call-center/agents/${selectedAgent.id}`, formData);
+                // Update local state for immediate feedback
+                setSelectedAgent(prev => ({ 
+                    ...prev, 
+                    ...formData,
+                    status: formData.status // Ensure status is updated
+                }));
+                alert("Agent Updated Successfully!");
+            } else {
+                const response = await api.post('/call-center/agents', formData); 
+                alert("New Agent Created Successfully!");
+            }
+            fetchAgents();
+            setShowAgentModal(false);
+        } catch (error) {
+            console.error('Error saving agent:', error);
+            alert(`Failed to save agent: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleViewDetails = (agent) => {
@@ -35,11 +109,13 @@ export function ManagerAgentsPage() {
         alert('Confirm agents removal?');
     };
 
-    if (view === 'details' && selectedAgent) {
-        return (
-            <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Header Actions */}
-                <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+    return (
+        <div className="space-y-6 relative pb-20">
+            {view === 'details' && selectedAgent ? (
+                /* --- DETAILS VIEW --- */
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Header Actions */}
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-orange-50 rounded-lg">
                             <User className="w-5 h-5 text-orange-500" />
@@ -58,6 +134,7 @@ export function ManagerAgentsPage() {
                             Back to Agents
                         </button>
                         <button
+                            onClick={() => openEditModal(selectedAgent)}
                             className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center text-sm font-bold transition-all active:scale-95 shadow-md shadow-orange-100"
                         >
                             <Edit className="w-4 h-4 mr-2" />
@@ -83,7 +160,7 @@ export function ManagerAgentsPage() {
                             {selectedAgent.status || 'Active'}
                         </span>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                            Last Login: <span className="text-gray-600">Jan 24, 2026 01:37</span>
+                            Last Login: <span className="text-gray-600">{new Date(selectedAgent.lastLogin).toLocaleString()}</span>
                         </p>
                     </div>
                     {/* Abstract background blobs */}
@@ -126,7 +203,7 @@ export function ManagerAgentsPage() {
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Last Login</p>
-                                    <p className="text-sm font-bold text-gray-800">Jan 24, 2026 01:37</p>
+                                    <p className="text-sm font-bold text-gray-800">{new Date(selectedAgent.lastLogin).toLocaleString()}</p>
                                 </div>
                             </div>
                         </div>
@@ -144,28 +221,28 @@ export function ManagerAgentsPage() {
                                     <div className="p-3 bg-blue-50 rounded-full text-blue-600 mb-2">
                                         <ShoppingBag className="w-5 h-5" />
                                     </div>
-                                    <p className="text-2xl font-black text-gray-900">0</p>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Total Orders</p>
+                                    <p className="text-2xl font-black text-gray-900">{selectedAgent.ordersHandled || 0}</p>
+                                    <p className="text-sm font-bold text-gray-400 uppercase">Total Orders</p>
                                 </div>
                                 <div className="flex flex-col items-center space-y-2">
                                     <div className="p-3 bg-green-50 rounded-full text-green-600 mb-2">
                                         <CheckCircle className="w-5 h-5" />
                                     </div>
-                                    <p className="text-2xl font-black text-gray-900">0</p>
+                                    <p className="text-2xl font-black text-gray-900">{selectedAgent.completedCount || 0}</p>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Completed</p>
                                 </div>
                                 <div className="flex flex-col items-center space-y-2">
                                     <div className="p-3 bg-yellow-50 rounded-full text-yellow-600 mb-2">
                                         <Clock className="w-5 h-5" />
                                     </div>
-                                    <p className="text-2xl font-black text-gray-900">0</p>
+                                    <p className="text-2xl font-black text-gray-900">{selectedAgent.pendingCount || 0}</p>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Pending</p>
                                 </div>
                                 <div className="flex flex-col items-center space-y-2">
                                     <div className="p-3 bg-purple-50 rounded-full text-purple-600 mb-2">
                                         <Percent className="w-5 h-5" />
                                     </div>
-                                    <p className="text-2xl font-black text-gray-900">{selectedAgent.performance || '85%'}</p>
+                                    <p className="text-2xl font-black text-gray-900">{selectedAgent.performance || '0%'}</p>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Success Rate</p>
                                 </div>
                             </div>
@@ -202,16 +279,16 @@ export function ManagerAgentsPage() {
                                 <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Quick Actions</h3>
                             </div>
                             <div className="p-6 space-y-3">
-                                <button className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-100">
+                                <button onClick={() => openEditModal()} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-100">
                                     <Edit className="w-4 h-4" /> Edit Agent
                                 </button>
-                                <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-100">
+                                <button onClick={() => navigate(`/manager/orders?agentId=${selectedAgent.id}`)} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-100">
                                     <LayoutGrid className="w-4 h-4" /> View Orders
                                 </button>
-                                <button className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-green-100">
+                                <button onClick={() => navigate('/manager/orders')} className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-green-100">
                                     <Plus className="w-4 h-4" /> Assign Order
                                 </button>
-                                <button className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-purple-100">
+                                <button onClick={() => navigate('/manager/performance')} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-purple-100">
                                     <BarChart3 className="w-4 h-4" /> View Reports
                                 </button>
                             </div>
@@ -272,19 +349,17 @@ export function ManagerAgentsPage() {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <Calendar className="w-4 h-4 text-gray-300" />
-                                        <p className="text-xs font-bold text-gray-500">Joined Jan 22, 2026</p>
+                                        <p className="text-xs font-bold text-gray-500">Joined {new Date(selectedAgent.joined).toLocaleDateString()}</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    </div>
                 </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-6 relative">
+            ) : (
+                /* --- LIST VIEW --- */
+                <div className="space-y-6">
             {/* Breadcrumb */}
             <div className="flex items-center text-sm text-gray-500">
                 <Home className="w-4 h-4 mr-2" />
@@ -305,6 +380,18 @@ export function ManagerAgentsPage() {
                         <h1 className="text-2xl font-bold text-gray-900">Agent Management</h1>
                         <p className="text-gray-500 text-sm mt-1">Manage call center agents and view performance</p>
                     </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button onClick={openAddModal} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center text-sm font-bold transition-all active:scale-95 shadow-md shadow-orange-100">
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Add New Agent
+                    </button>
+                    <button 
+                        onClick={() => fetchAgents()}
+                        className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-lg border border-gray-100 transition-all active:scale-90"
+                    >
+                        <RefreshCcw className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
 
@@ -339,108 +426,163 @@ export function ManagerAgentsPage() {
             </div>
 
             {/* Agents List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredAgents.length > 0 ? (
-                    filteredAgents.map((agent, idx) => (
-                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow group">
-                            <div className="p-6">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center">
-                                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold text-gray-500 mr-3">
-                                            {agent.name.charAt(0)}
+            {loading ? (
+                <div className="flex justify-center items-center h-64">
+                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredAgents.length > 0 ? (
+                        filteredAgents.map((agent, idx) => (
+                            <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow group">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center">
+                                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold text-gray-500 mr-3">
+                                                {agent.name.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-900">{agent.name}</h3>
+                                                <p className="text-sm text-gray-500">{agent.role}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold text-gray-900">{agent.name}</h3>
-                                            <p className="text-sm text-gray-500">{agent.role}</p>
+                                        <button className="text-gray-400 hover:text-gray-600">
+                                            <MoreVertical className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-3 mb-6">
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                                            {agent.email}
+                                        </div>
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Phone className="w-4 h-4 mr-2 text-gray-400" />
+                                            {agent.phone}
+                                        </div>
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Activity className="w-4 h-4 mr-2 text-gray-400" />
+                                            Status:
+                                            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                {agent.status}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <BarChart2 className="w-4 h-4 mr-2 text-gray-400" />
+                                            Performance:
+                                            <span className="ml-2 font-bold text-gray-900">{agent.performance}</span>
                                         </div>
                                     </div>
-                                    <button className="text-gray-400 hover:text-gray-600">
-                                        <MoreVertical className="w-5 h-5" />
+                                </div>
+
+                                <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-between items-center bg-opacity-50 group-hover:bg-opacity-100 transition-colors">
+                                    <span className="text-xs text-gray-500">Joined: {new Date(agent.joined).toLocaleDateString()}</span>
+                                    <button
+                                        onClick={() => handleViewDetails(agent)}
+                                        className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                                    >
+                                        View Details
                                     </button>
                                 </div>
-
-                                <div className="space-y-3 mb-6">
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                                        {agent.email}
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                                        {agent.phone}
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <Activity className="w-4 h-4 mr-2 text-gray-400" />
-                                        Status:
-                                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {agent.status}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <BarChart2 className="w-4 h-4 mr-2 text-gray-400" />
-                                        Performance:
-                                        <span className="ml-2 font-bold text-gray-900">{agent.performance}</span>
-                                    </div>
-                                </div>
                             </div>
-
-                            <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-between items-center bg-opacity-50 group-hover:bg-opacity-100 transition-colors">
-                                <span className="text-xs text-gray-500">Joined: {agent.joined}</span>
-                                <button
-                                    onClick={() => handleViewDetails(agent)}
-                                    className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                                >
-                                    View Details
-                                </button>
+                        ))
+                    ) : (
+                        <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                <Users className="w-8 h-8 text-gray-400" />
                             </div>
+                            <h3 className="text-lg font-medium text-gray-900">No agents found</h3>
+                            <p className="text-gray-500 mt-1">Try adjusting your search or filters</p>
                         </div>
-                    ))
-                ) : (
-                    <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <Users className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-900">No agents found</h3>
-                        <p className="text-gray-500 mt-1">Try adjusting your search or filters</p>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
+                </div>
+            )}
 
             {/* --- MODALS --- */}
 
-            {/* Add New Agent Modal */}
-            {showAddAgentModal && (
+            {/* Agent Modal (Add/Edit) */}
+            {showAgentModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-blue-50">
-                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><UserPlus className="w-5 h-5 mr-2 text-blue-600" /> Add New Agent</h3>
-                            <button onClick={() => setShowAddAgentModal(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 transition-all"><X className="w-5 h-5" /></button>
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                                {modalMode === 'add' ? <UserPlus className="w-5 h-5 mr-2 text-blue-600" /> : <Edit className="w-5 h-5 mr-2 text-blue-600" />}
+                                {modalMode === 'add' ? 'Add New Agent' : 'Edit Agent'}
+                            </h3>
+                            <button onClick={() => setShowAgentModal(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 transition-all"><X className="w-5 h-5" /></button>
                         </div>
-                        <form onSubmit={handleAddAgent} className="p-6 space-y-4">
+                        <form onSubmit={handleAgentSubmit} className="p-6 space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Full Name</label>
-                                <input type="text" required placeholder="John Doe" className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" />
+                                <input 
+                                    type="text" 
+                                    required 
+                                    placeholder="John Doe" 
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Email</label>
-                                <input type="email" required placeholder="john@company.com" className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" />
+                                <input 
+                                    type="email" 
+                                    required 
+                                    placeholder="john@company.com" 
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" 
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Role</label>
-                                <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500">
-                                    <option>Support Agent</option>
-                                    <option>Senior Agent</option>
-                                    <option>Team Lead</option>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Phone</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="+971 50 000 0000" 
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" 
+                                    value={formData.phone}
+                                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                />
+                            </div>
+                            {modalMode === 'add' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Password</label>
+                                    <input 
+                                        type="password" 
+                                        required 
+                                        placeholder="Set a password" 
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500" 
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                                    />
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Status</label>
+                                <select 
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500"
+                                    value={formData.status}
+                                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                >
+                                    <option value="Active">Active</option>
+                                    <option value="Offline">Offline</option>
+                                    <option value="Inactive">Inactive</option>
                                 </select>
                             </div>
                             <div className="pt-2 flex gap-3">
-                                <button type="button" onClick={() => setShowAddAgentModal(false)} className="flex-1 px-4 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200">Cancel</button>
-                                <button type="submit" className="flex-1 px-4 py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md">Add Agent</button>
+                                <button type="button" onClick={() => setShowAgentModal(false)} className="flex-1 px-4 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200">Cancel</button>
+                                <button type="submit" className="flex-1 px-4 py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md">
+                                    {modalMode === 'add' ? 'Add Agent' : 'Save Changes'}
+                                </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
+
 
 
         </div>
