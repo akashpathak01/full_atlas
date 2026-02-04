@@ -110,9 +110,88 @@ const completeDelivery = async (taskId, agentId, proof, user) => {
     return updatedTask;
 };
 
+
+const getDeliveryOrders = async (user) => {
+    const { role, id: userId } = user;
+
+    // 1. Get agent's admin
+    const agent = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { createdById: true }
+    });
+
+    if (!agent || !agent.createdById) {
+        return [];
+    }
+    const adminId = agent.createdById;
+
+    // 2. Fetch orders
+    // - PACKED (Unassigned) -> Available to pick up (scoped to Admin's tenants)
+    // - OUT_FOR_DELIVERY / DELIVERED / DELIVERY_FAILED -> Assigned to THIS agent
+    const orders = await prisma.order.findMany({
+        where: {
+            OR: [
+                {
+                    status: 'PACKED',
+                    seller: { adminId: adminId }
+                },
+                {
+                    status: { in: ['OUT_FOR_DELIVERY', 'DELIVERED', 'DELIVERY_FAILED'] },
+                    deliveryTask: { agentId: userId }
+                }
+            ]
+        },
+        include: {
+            customer: true,
+            deliveryTask: true,
+            seller: { include: { user: { select: { name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return orders;
+};
+
+const getStats = async (user) => {
+    const { id: userId } = user;
+
+    // Agent's performance stats from DeliveryTasks
+    const tasks = await prisma.deliveryTask.findMany({
+        where: { agentId: userId },
+        include: { order: { select: { status: true } } }
+    });
+
+    // Also need count of PACKED orders available to pick up (scoped to admin)
+    const agent = await prisma.user.findUnique({ where: { id: userId }, select: { createdById: true } });
+    let readyCount = 0;
+
+    if (agent && agent.createdById) {
+        readyCount = await prisma.order.count({
+            where: {
+                status: 'PACKED',
+                seller: { adminId: agent.createdById }
+            }
+        });
+    }
+
+    const inDelivery = tasks.filter(t => t.order.status === 'OUT_FOR_DELIVERY').length;
+    const delivered = tasks.filter(t => t.order.status === 'DELIVERED').length;
+    const failed = tasks.filter(t => t.order.status === 'DELIVERY_FAILED').length;
+
+    return {
+        readyForDelivery: readyCount,
+        inDelivery,
+        delivered,
+        failed,
+        totalAssigned: tasks.length
+    };
+};
+
 module.exports = {
     assignOrder,
     listTasks,
     startDelivery,
-    completeDelivery
+    completeDelivery,
+    getDeliveryOrders,
+    getStats
 };

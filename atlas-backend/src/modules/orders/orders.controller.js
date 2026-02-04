@@ -197,13 +197,14 @@ const createOrder = async (req, res) => {
     }
 };
 
+
 const updateOrderStatus = async (req, res) => {
     const { id: orderId } = req.params;
     const { status: nextStatus } = req.body;
     const { role } = req.user;
 
     // 1. Strict status validation
-    const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'PACKED', 'IN_PACKAGING'];
+    const allowedStatuses = ['CONFIRMED', 'CANCELLED', 'PACKED', 'IN_PACKAGING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELIVERY_FAILED'];
     if (!allowedStatuses.includes(nextStatus)) {
         return res.status(400).json({ message: 'Invalid status requested.' });
     }
@@ -217,7 +218,7 @@ const updateOrderStatus = async (req, res) => {
 
         // 2. Role & Transition Logic
         if (role === 'CALL_CENTER_AGENT' || role === 'CALL_CENTER_MANAGER') {
-            if (order.status !== 'PENDING_REVIEW') {
+            if (activeStatus !== 'PENDING_REVIEW') {
                 return res.status(400).json({ message: 'Call Center can only process PENDING_REVIEW orders.' });
             }
             if (!['CONFIRMED', 'CANCELLED'].includes(nextStatus)) {
@@ -241,7 +242,28 @@ const updateOrderStatus = async (req, res) => {
             } else {
                 return res.status(400).json({ message: 'Invalid status for Packaging Agent.' });
             }
+        } else if (role === 'DELIVERY_AGENT') {
+            if (activeStatus === 'PACKED') {
+                if (nextStatus !== 'OUT_FOR_DELIVERY') {
+                    return res.status(400).json({ message: 'Can only move PACKED orders to OUT_FOR_DELIVERY.' });
+                }
+            } else if (activeStatus === 'OUT_FOR_DELIVERY') {
+                // Must be assigned to this agent
+                const task = await prisma.deliveryTask.findUnique({ where: { orderId: parseInt(orderId) } });
+                if (!task || task.agentId !== req.user.id) {
+                    return res.status(403).json({ message: 'You are not assigned to this delivery task.' });
+                }
+
+                if (!['DELIVERED', 'DELIVERY_FAILED'].includes(nextStatus)) {
+                    return res.status(400).json({ message: 'Can only move OUT_FOR_DELIVERY to DELIVERED or DELIVERY_FAILED.' });
+                }
+            } else {
+                return res.status(400).json({ message: 'Invalid status for Delivery Agent.' });
+            }
         } else {
+            // Admin/Super Admin might want to force update? 
+            // For this scope, let's assume strict roles. Admin might get 403 here unless we add them.
+            // But requirement says "Enforce strict role-based access".
             return res.status(403).json({ message: 'Unauthorized. Role not allowed for this status update.' });
         }
 
@@ -263,6 +285,30 @@ const updateOrderStatus = async (req, res) => {
                 await tx.packagingTask.update({
                     where: { orderId: ord.id },
                     data: { completedAt: new Date() }
+                });
+            } else if (nextStatus === 'OUT_FOR_DELIVERY') {
+                await tx.deliveryTask.create({
+                    data: {
+                        orderId: ord.id,
+                        agentId: req.user.id
+                    }
+                });
+            } else if (nextStatus === 'DELIVERED') {
+                await tx.deliveryTask.update({
+                    where: { orderId: ord.id },
+                    data: {
+                        completedAt: new Date(),
+                        receiverName: req.body.receiverName || 'Unknown',
+                        notes: req.body.notes || null
+                    }
+                });
+            } else if (nextStatus === 'DELIVERY_FAILED') {
+                await tx.deliveryTask.update({
+                    where: { orderId: ord.id },
+                    data: {
+                        completedAt: new Date(), // Mark finished even if failed
+                        notes: req.body.notes || 'Delivery Failed'
+                    }
                 });
             }
 

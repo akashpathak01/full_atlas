@@ -1,9 +1,42 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Truck, CheckCircle, Zap, FileText, Box, Clock, Shield, AlertTriangle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 export function DeliveryPerformancePage() {
     const navigate = useNavigate();
+    const [stats, setStats] = useState({
+        totalAssigned: 0,
+        readyForDelivery: 0,
+        inDelivery: 0,
+        delivered: 0,
+        failed: 0
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get('http://localhost:5000/api/delivery/stats', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setStats(res.data);
+                setLoading(false);
+            } catch (error) {
+                console.error("Error fetching stats:", error);
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
+    // Derived stats
+    const totalCompleted = stats.delivered + stats.failed;
+    const passRate = totalCompleted > 0 ? Math.round((stats.delivered / totalCompleted) * 100) : 0;
+    const failRate = totalCompleted > 0 ? Math.round((stats.failed / totalCompleted) * 100) : 0;
 
     return (
         <div className="space-y-6">
@@ -15,7 +48,7 @@ export function DeliveryPerformancePage() {
                 </div>
                 <div className="text-right mt-2 md:mt-0">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Current Time</p>
-                    <p className="text-xl font-black text-gray-900 leading-none">14:43:45</p>
+                    <p className="text-xl font-black text-gray-900 leading-none">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
             </div>
 
@@ -42,7 +75,7 @@ export function DeliveryPerformancePage() {
             <div className="flex justify-end p-2 px-1">
                 <div className="text-right">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Today's Date</p>
-                    <p className="text-base font-black text-gray-700">Saturday, January 24, 2026</p>
+                    <p className="text-base font-black text-gray-700">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
             </div>
 
@@ -57,25 +90,37 @@ export function DeliveryPerformancePage() {
                         <div className="p-3 bg-gray-50 rounded-xl mr-4 group-hover:bg-gray-100 transition-colors">
                             <FileText className="w-6 h-6 text-gray-500" />
                         </div>
-                        <span className="text-sm font-bold text-gray-500">Total Orders</span>
+                        <div>
+                            <span className="text-sm font-bold text-gray-500 block">Total Assigned</span>
+                            <span className="text-2xl font-black text-gray-900">{stats.totalAssigned}</span>
+                        </div>
                     </div>
                     <div className="border border-gray-100 rounded-xl p-6 flex items-center group hover:shadow-md transition-all">
                         <div className="p-3 bg-green-50 rounded-xl mr-4 group-hover:bg-green-100 transition-colors">
                             <CheckCircle className="w-6 h-6 text-green-500" />
                         </div>
-                        <span className="text-sm font-bold text-gray-500">Ready for Delivery</span>
+                        <div>
+                            <span className="text-sm font-bold text-gray-500 block">Ready for Delivery</span>
+                            <span className="text-2xl font-black text-gray-900">{stats.readyForDelivery}</span>
+                        </div>
                     </div>
                     <div className="border border-gray-100 rounded-xl p-6 flex items-center group hover:shadow-md transition-all">
                         <div className="p-3 bg-blue-50 rounded-xl mr-4 group-hover:bg-blue-100 transition-colors">
                             <Zap className="w-6 h-6 text-blue-500" />
                         </div>
-                        <span className="text-sm font-bold text-gray-500">In Delivery</span>
+                        <div>
+                            <span className="text-sm font-bold text-gray-500 block">In Delivery</span>
+                            <span className="text-2xl font-black text-gray-900">{stats.inDelivery}</span>
+                        </div>
                     </div>
                     <div className="border border-gray-100 rounded-xl p-6 flex items-center group hover:shadow-md transition-all">
                         <div className="p-3 bg-purple-50 rounded-xl mr-4 group-hover:bg-purple-100 transition-colors">
                             <CheckCircle className="w-6 h-6 text-purple-400" />
                         </div>
-                        <span className="text-sm font-bold text-gray-500">Delivered</span>
+                        <div>
+                            <span className="text-sm font-bold text-gray-500 block">Delivered</span>
+                            <span className="text-2xl font-black text-gray-900">{stats.delivered}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -84,21 +129,24 @@ export function DeliveryPerformancePage() {
             <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
                 <div className="mb-8">
                     <h3 className="text-lg font-bold text-gray-800">This Week Overview</h3>
-                    <p className="text-sm text-gray-500">Your performance metrics for the current week</p>
+                    <p className="text-sm text-gray-500">Your performance metrics (Lifetime)</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="border border-gray-100 rounded-xl p-6 flex items-center group hover:shadow-md transition-all">
                         <div className="p-3 bg-green-50 rounded-xl mr-4">
                             <Box className="w-6 h-6 text-green-500" />
                         </div>
-                        <span className="text-sm font-bold text-gray-500">Packages Completed</span>
+                        <div>
+                            <h4 className="text-xl font-black text-gray-900">{stats.delivered}</h4>
+                            <span className="text-sm font-bold text-gray-500">Packages Completed</span>
+                        </div>
                     </div>
                     <div className="border border-gray-100 rounded-xl p-6 flex items-center group hover:shadow-md transition-all">
                         <div className="p-3 bg-blue-50 rounded-xl mr-4">
                             <Clock className="w-6 h-6 text-blue-500" />
                         </div>
                         <div>
-                            <h4 className="text-xl font-black text-gray-900">min</h4>
+                            <h4 className="text-xl font-black text-gray-900">--</h4>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Avg Duration</p>
                         </div>
                     </div>
@@ -106,15 +154,18 @@ export function DeliveryPerformancePage() {
                         <div className="p-3 bg-yellow-50 rounded-xl mr-4">
                             <Shield className="w-6 h-6 text-yellow-500" />
                         </div>
-                        <span className="text-sm font-bold text-gray-500">Quality Checks</span>
+                        <div>
+                            <h4 className="text-xl font-black text-gray-900">{totalCompleted}</h4>
+                            <span className="text-sm font-bold text-gray-500">Total Checks</span>
+                        </div>
                     </div>
                     <div className="border border-gray-100 rounded-xl p-6 flex items-center group hover:shadow-md transition-all">
                         <div className="p-3 bg-purple-50 rounded-xl mr-4 flex items-center justify-center">
                             <span className="text-purple-600 font-black text-xl">%</span>
                         </div>
                         <div>
-                            <h4 className="text-xl font-black text-gray-900">%</h4>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Pass Rate</p>
+                            <h4 className="text-xl font-black text-gray-900">{passRate}%</h4>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Success Rate</p>
                         </div>
                     </div>
                 </div>
@@ -126,19 +177,12 @@ export function DeliveryPerformancePage() {
                 <div className="space-y-3">
                     <div className="flex items-center gap-3 p-4 px-6 bg-green-50/50 rounded-xl border border-green-50 transition-all hover:bg-green-50">
                         <CheckCircle className="w-4 h-4 text-green-500" />
-                        <span className="text-sm font-bold text-green-900">Passed</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-4 px-6 bg-yellow-50/50 rounded-xl border border-yellow-50 transition-all hover:bg-yellow-50">
-                        <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                        <span className="text-sm font-bold text-yellow-900">Conditional</span>
+                        <span className="text-sm font-bold text-green-900">Passed ({stats.delivered})</span>
                     </div>
                     <div className="flex items-center gap-3 p-4 px-6 bg-red-50/50 rounded-xl border border-red-50 transition-all hover:bg-red-50">
                         <X className="w-4 h-4 text-red-500" />
-                        <span className="text-sm font-bold text-red-900">Failed</span>
+                        <span className="text-sm font-bold text-red-900">Failed ({stats.failed})</span>
                     </div>
-                </div>
-                <div className="flex justify-center items-center py-20">
-                    <p className="text-sm font-bold text-gray-300 italic uppercase tracking-widest">No quality check data available</p>
                 </div>
             </div>
 

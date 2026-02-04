@@ -1,12 +1,100 @@
-import React, { useState } from 'react';
-import { Home, Truck, Search, Box, X, Check, Scan, Layout, Filter, Settings, Ghost } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { Home, Truck, Search, Box, X, Check, Scan, Layout, Filter, Settings, Ghost, MapPin, Phone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 export function DeliveryOrdersPage() {
     const navigate = useNavigate();
 
-    // States
+    // Data States
+    const [stats, setStats] = useState({
+        ready: 0,
+        inDelivery: 0,
+        delivered: 0,
+        failed: 0
+    });
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Modal States
     const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [completeDeliveryOrder, setCompleteDeliveryOrder] = useState(null); // For Complete Delivery Modal
+    const [receiverName, setReceiverName] = useState('');
+    const [deliveryNotes, setDeliveryNotes] = useState('');
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const [statsRes, ordersRes] = await Promise.all([
+                axios.get('http://localhost:5000/api/delivery/stats', { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get('http://localhost:5000/api/orders/delivery', { headers: { Authorization: `Bearer ${token}` } })
+            ]);
+
+            setStats({
+                ready: statsRes.data.readyForDelivery,
+                inDelivery: statsRes.data.inDelivery,
+                delivered: statsRes.data.delivered,
+                failed: statsRes.data.failed
+            });
+
+            setOrders(ordersRes.data);
+            setLoading(false);
+        } catch (error) {
+            console.error("Error fetching delivery data:", error);
+            setLoading(false);
+        }
+    };
+
+    const handleStartDelivery = async (order) => {
+        if (!confirm(`Start delivery for ${order.orderNumber}?`)) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.patch(`http://localhost:5000/api/orders/${order.id}/status`,
+                { status: 'OUT_FOR_DELIVERY' },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            fetchData();
+        } catch (error) {
+            alert("Failed: " + (error.response?.data?.message || error.message));
+        }
+    };
+
+    const handleOpenCompleteModal = (order) => {
+        setCompleteDeliveryOrder(order);
+        setReceiverName('');
+        setDeliveryNotes('');
+    };
+
+    const confirmCompleteDelivery = async (status) => {
+        if (!completeDeliveryOrder) return;
+
+        if (status === 'DELIVERED' && !receiverName.trim()) {
+            alert("Receiver name is required for successful delivery.");
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.patch(`http://localhost:5000/api/orders/${completeDeliveryOrder.id}/status`,
+                {
+                    status: status,
+                    receiverName: receiverName,
+                    notes: deliveryNotes
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            setCompleteDeliveryOrder(null);
+            fetchData();
+        } catch (error) {
+            alert("Failed: " + (error.response?.data?.message || error.message));
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -53,7 +141,7 @@ export function DeliveryOrdersPage() {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-gray-400">Ready for Delivery</p>
-                            <h3 className="text-3xl font-black text-gray-900 leading-tight">0</h3>
+                            <h3 className="text-3xl font-black text-gray-900 leading-tight">{stats.ready}</h3>
                         </div>
                     </div>
                 </div>
@@ -64,7 +152,7 @@ export function DeliveryOrdersPage() {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-gray-400">In Delivery</p>
-                            <h3 className="text-3xl font-black text-gray-900 leading-tight">0</h3>
+                            <h3 className="text-3xl font-black text-gray-900 leading-tight">{stats.inDelivery}</h3>
                         </div>
                     </div>
                 </div>
@@ -75,7 +163,7 @@ export function DeliveryOrdersPage() {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-gray-400">Delivered</p>
-                            <h3 className="text-3xl font-black text-gray-900 leading-tight">0</h3>
+                            <h3 className="text-3xl font-black text-gray-900 leading-tight">{stats.delivered}</h3>
                         </div>
                     </div>
                 </div>
@@ -86,7 +174,7 @@ export function DeliveryOrdersPage() {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-gray-400">Failed Deliveries</p>
-                            <h3 className="text-3xl font-black text-gray-900 leading-tight">0</h3>
+                            <h3 className="text-3xl font-black text-gray-900 leading-tight">{stats.failed}</h3>
                         </div>
                     </div>
                 </div>
@@ -109,56 +197,126 @@ export function DeliveryOrdersPage() {
                 </button>
             </div>
 
-            {/* Filter Section */}
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div>
-                        <label className="text-xs font-bold text-gray-800 mb-2 block">Search</label>
-                        <input
-                            type="text"
-                            placeholder="Order Code, Customer, Phone..."
-                            className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-blue-500 placeholder:text-gray-300 transition-all"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-800 mb-2 block">Status</label>
-                        <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition-all appearance-none cursor-pointer">
-                            <option>All Statuses</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-800 mb-2 block">Date Filter</label>
-                        <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-blue-500 transition-all appearance-none cursor-pointer">
-                            <option>All Dates</option>
-                        </select>
-                    </div>
-                </div>
-                <div className="flex justify-end gap-3 mt-8">
-                    <button className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 flex items-center gap-2 shadow-lg shadow-blue-100 transition-all active:scale-95 text-sm">
-                        <Search className="w-4 h-4" /> Apply Filters
-                    </button>
-                    <button className="px-8 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 flex items-center gap-2 transition-all active:scale-95 text-sm">
-                        <X className="w-4 h-4 text-red-500" /> Clear Filters
-                    </button>
-                </div>
-            </div>
-
             {/* Orders List */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-50 flex items-center gap-3">
                     <Layout className="w-5 h-5 text-blue-600" />
                     <div>
                         <h3 className="text-lg font-bold text-gray-900">Orders List</h3>
-                        <p className="text-xs font-bold text-gray-400">Showing 0-0 of 0 orders</p>
+                        <p className="text-xs font-bold text-gray-400">Showing {orders.length} orders</p>
                     </div>
                 </div>
-                <div className="flex flex-col items-center justify-center py-24 bg-gray-50/20">
-                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-50 mb-6 group hover:scale-110 transition-transform">
-                        <Truck className="w-10 h-10 text-gray-200 group-hover:text-blue-200 transition-colors" />
-                    </div>
-                    <p className="text-gray-400 font-bold text-sm tracking-widest uppercase opacity-40">No activity data available</p>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-50/50 text-xs font-bold text-gray-600 uppercase border-b border-gray-100">
+                            <tr>
+                                <th className="px-6 py-4 text-left">Order #</th>
+                                <th className="px-6 py-4 text-left">Customer</th>
+                                <th className="px-6 py-4 text-left">Address</th>
+                                <th className="px-6 py-4 text-left">Status</th>
+                                <th className="px-6 py-4 text-left">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {orders.map((order) => (
+                                <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-6 py-4 text-sm font-bold text-gray-700">{order.orderNumber}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        <div className="font-medium">{order.customerName}</div>
+                                        <div className="text-xs text-gray-400">{order.customerPhone}</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{order.shippingAddress}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`text-xs px-3 py-1 rounded-full font-medium border ${order.status === 'PACKED' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                            order.status === 'OUT_FOR_DELIVERY' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                order.status === 'DELIVERED' ? 'bg-green-50 text-green-600 border-green-100' :
+                                                    'bg-red-50 text-red-600 border-red-100'
+                                            }`}>
+                                            {order.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm font-medium">
+                                        {order.status === 'PACKED' && (
+                                            <button
+                                                onClick={() => handleStartDelivery(order)}
+                                                className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-xs"
+                                            >
+                                                Start Delivery
+                                            </button>
+                                        )}
+                                        {order.status === 'OUT_FOR_DELIVERY' && (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleOpenCompleteModal(order)}
+                                                    className="text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-xs"
+                                                >
+                                                    Complete
+                                                </button>
+                                                <button
+                                                    onClick={() => confirmCompleteDelivery('DELIVERY_FAILED')}
+                                                    className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs border border-red-200"
+                                                >
+                                                    Fail
+                                                </button>
+                                            </div>
+                                        )}
+                                        {['DELIVERED', 'DELIVERY_FAILED'].includes(order.status) && (
+                                            <span className="text-gray-400 italic text-xs">Completed</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {orders.length === 0 && (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                                        No orders found.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
+
+            {/* Complete Delivery Modal */}
+            {completeDeliveryOrder && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-xl text-gray-900">Complete Delivery</h3>
+                            <button onClick={() => setCompleteDeliveryOrder(null)} className="p-1 rounded-full hover:bg-gray-100"><X className="w-5 h-5 text-gray-400" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Receiver Name *</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-gray-200 rounded-lg p-2.5 text-sm"
+                                    placeholder="Who received the package?"
+                                    value={receiverName}
+                                    onChange={(e) => setReceiverName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Notes (Optional)</label>
+                                <textarea
+                                    className="w-full border border-gray-200 rounded-lg p-2.5 text-sm"
+                                    placeholder="Any delivery notes..."
+                                    rows="3"
+                                    value={deliveryNotes}
+                                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setCompleteDeliveryOrder(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200">Cancel</button>
+                                <button onClick={() => confirmCompleteDelivery('DELIVERED')} className="flex-1 py-2.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700">Confirm</button>
+                                <button onClick={() => confirmCompleteDelivery('DELIVERY_FAILED')} className="px-4 py-2.5 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 border border-red-200">Fail</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Scanner Modal Simulation */}
             {isScannerOpen && (

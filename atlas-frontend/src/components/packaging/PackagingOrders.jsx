@@ -110,13 +110,10 @@ export function PackagingOrders() {
                         <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 border-b border-gray-100">
                             <div>
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Status</label>
-                                <select className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500">
-                                    <option>All Statuses</option>
-                                    <option value="CONFIRMED">Ready (Confirmed)</option>
-                                    <option value="IN_PACKAGING">In Progress</option>
-                                    <option value="PACKED">Packed (Completed)</option>
-                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                <select
                                     className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500"
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    value={filterStatus}
                                 >
                                     <option value="ALL">All Statuses</option>
                                     <option value="CONFIRMED">Ready (Confirmed)</option>

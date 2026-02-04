@@ -16,7 +16,7 @@ export function OrderForm({ onBack }) {
     const [formData, setFormData] = useState({
         customerName: '',
         customerPhone: '',
-        customerPhone: '',
+
         customerEmail: '', // Re-added email
         orderDate: new Date().toISOString().slice(0, 10),
         orderTime: new Date().toISOString().slice(11, 16),

@@ -50,9 +50,30 @@ const completeDelivery = async (req, res) => {
     }
 };
 
+
+const getDeliveryOrders = async (req, res) => {
+    try {
+        const orders = await deliveryService.getDeliveryOrders(req.user);
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching delivery orders', error: error.message });
+    }
+};
+
+const getDeliveryStats = async (req, res) => {
+    try {
+        const stats = await deliveryService.getStats(req.user);
+        res.json(stats);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching stats', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
     startDelivery,
-    completeDelivery
+    completeDelivery,
+    getDeliveryOrders,
+    getDeliveryStats
 };

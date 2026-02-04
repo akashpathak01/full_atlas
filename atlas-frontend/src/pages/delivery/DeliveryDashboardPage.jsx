@@ -1,11 +1,21 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, Truck, Layout, BarChart, Settings, ShoppingCart, Search, Filter, Scan, Package, Eye, Clock, List, Box, X, MapPin, Phone, User, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { deliveryDashboardData } from '../../data/deliveryDummyData';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 export function DeliveryDashboardPage() {
     const navigate = useNavigate();
+
+    // Data States
+    const [stats, setStats] = useState({
+        total: 0,
+        pending: 0,
+        processing: 0,
+        shipped: 0
+    });
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     // Modal States
     const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -17,6 +27,33 @@ export function DeliveryDashboardPage() {
     const [filterStatus, setFilterStatus] = useState('All Statuses');
     const [filterDate, setFilterDate] = useState('All Time');
     const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const [statsRes, ordersRes] = await Promise.all([
+                axios.get('http://localhost:5000/api/delivery/stats', { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get('http://localhost:5000/api/orders/delivery', { headers: { Authorization: `Bearer ${token}` } })
+            ]);
+
+            setStats({
+                total: statsRes.data.totalAssigned + statsRes.data.readyForDelivery,
+                pending: statsRes.data.readyForDelivery, // Ready to pick up
+                processing: statsRes.data.inDelivery,    // In transit
+                shipped: statsRes.data.delivered         // Completed
+            });
+
+            setOrders(ordersRes.data);
+            setLoading(false);
+        } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+            setLoading(false);
+        }
+    };
 
     const handleOpenScanner = () => {
         setIsScannerOpen(true);
@@ -31,10 +68,23 @@ export function DeliveryDashboardPage() {
         setIsStartDeliveryOpen(true);
     };
 
-    const confirmStartDelivery = () => {
-        alert(`Delivery started for Order #${selectedOrder?.id}! (Simulation)`);
-        setIsStartDeliveryOpen(false);
-        setSelectedOrder(null);
+    const confirmStartDelivery = async () => {
+        if (!selectedOrder) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.patch(`http://localhost:5000/api/orders/${selectedOrder.id}/status`,
+                { status: 'OUT_FOR_DELIVERY' },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            alert(`Delivery started for Order #${selectedOrder.orderNumber}!`);
+            setIsStartDeliveryOpen(false);
+            setSelectedOrder(null);
+            fetchData(); // Refresh
+        } catch (error) {
+            console.error("Error starting delivery:", error);
+            alert("Failed to start delivery. " + (error.response?.data?.message || ""));
+        }
     };
 
     const handleFilter = () => {
@@ -97,7 +147,7 @@ export function DeliveryDashboardPage() {
                     </div>
                     <div>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total</p>
-                        <h3 className="text-3xl font-bold text-gray-900">{deliveryDashboardData.stats.total}</h3>
+                        <h3 className="text-3xl font-bold text-gray-900">{stats.total}</h3>
                         <p className="text-gray-400 text-xs flex items-center mt-1">
                             <span className="text-green-500 mr-1">↑</span> All orders
                         </p>
@@ -110,7 +160,7 @@ export function DeliveryDashboardPage() {
                     </div>
                     <div>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Pending</p>
-                        <h3 className="text-3xl font-bold text-gray-900">{deliveryDashboardData.stats.pending}</h3>
+                        <h3 className="text-3xl font-bold text-gray-900">{stats.pending}</h3>
                         <p className="text-gray-400 text-xs flex items-center mt-1">
                             <span className="text-blue-500 mr-1">↑</span> Awaiting delivery
                         </p>
@@ -122,23 +172,23 @@ export function DeliveryDashboardPage() {
                         <Settings className="w-6 h-6 text-purple-600" />
                     </div>
                     <div>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Processing</p>
-                        <h3 className="text-3xl font-bold text-gray-900">{deliveryDashboardData.stats.processing}</h3>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">In Transit</p>
+                        <h3 className="text-3xl font-bold text-gray-900">{stats.processing}</h3>
                         <p className="text-gray-400 text-xs flex items-center mt-1">
-                            <span className="text-purple-500 mr-1">↑</span> In progress
+                            <span className="text-purple-500 mr-1">↑</span> On the way
                         </p>
                     </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center">
                     <div className="p-4 bg-green-100/50 rounded-xl mr-4">
-                        <Truck className="w-6 h-6 text-green-600" />
+                        <CheckCircle className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Shipped</p>
-                        <h3 className="text-3xl font-bold text-gray-900">{deliveryDashboardData.stats.shipped}</h3>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Delivered</p>
+                        <h3 className="text-3xl font-bold text-gray-900">{stats.shipped}</h3>
                         <p className="text-gray-400 text-xs flex items-center mt-1">
-                            <span className="text-green-500 mr-1">↑</span> Ready for delivery
+                            <span className="text-green-500 mr-1">↑</span> Completed
                         </p>
                     </div>
                 </div>
@@ -244,31 +294,39 @@ export function DeliveryDashboardPage() {
                                 <th className="px-6 py-4 text-left">Customer</th>
                                 <th className="px-6 py-4 text-left">Date</th>
                                 <th className="px-6 py-4 text-left">Status</th>
-                                <th className="px-6 py-4 text-left">Priority</th>
                                 <th className="px-6 py-4 text-left">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {deliveryDashboardData.orders.map((order, idx) => (
+                            {orders.map((order, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4 text-sm font-bold text-gray-700">{order.id}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{order.customer}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{order.date}</td>
+                                    <td className="px-6 py-4 text-sm font-bold text-gray-700">{order.orderNumber}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">{order.customerName}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</td>
                                     <td className="px-6 py-4">
-                                        <span className={`text-xs px-3 py-1 rounded-full font-medium border ${order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-100' :
-                                                order.status === 'Pending' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
-                                                    'bg-green-50 text-green-600 border-green-100'
+                                        <span className={`text-xs px-3 py-1 rounded-full font-medium border ${order.status === 'PACKED' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                            order.status === 'OUT_FOR_DELIVERY' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                order.status === 'DELIVERED' ? 'bg-green-50 text-green-600 border-green-100' :
+                                                    'bg-red-50 text-red-600 border-red-100'
                                             }`}>
                                             {order.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">{order.priority}</td>
                                     <td className="px-6 py-4 text-sm font-medium">
                                         <button onClick={() => handleViewOrder(order)} className="text-blue-600 hover:text-blue-800 mr-3 transition-colors">View</button>
-                                        <button onClick={() => handleStartDelivery(order)} className="text-green-600 hover:text-green-800 transition-colors">Start Delivery</button>
+                                        {order.status === 'PACKED' && (
+                                            <button onClick={() => handleStartDelivery(order)} className="text-green-600 hover:text-green-800 transition-colors">Start Delivery</button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
+                            {orders.length === 0 && !loading && (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                                        No recent orders found.
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -301,18 +359,18 @@ export function DeliveryDashboardPage() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><Package className="w-5 h-5 mr-2 text-orange-500" /> Order Details: {selectedOrder.id}</h3>
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center"><Package className="w-5 h-5 mr-2 text-orange-500" /> Order Details: {selectedOrder.orderNumber}</h3>
                             <button onClick={() => setSelectedOrder(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 transition-all"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Customer</p>
-                                    <p className="text-lg font-bold text-gray-900">{selectedOrder.customer}</p>
+                                    <p className="text-lg font-bold text-gray-900">{selectedOrder.customerName}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Date</p>
-                                    <p className="text-sm font-bold text-gray-700">{selectedOrder.date}</p>
+                                    <p className="text-sm font-bold text-gray-700">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
                                 </div>
                             </div>
 
@@ -321,27 +379,28 @@ export function DeliveryDashboardPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Status</p>
-                                    <span className={`inline-block text-xs px-2 py-1 rounded-md font-medium border ${selectedOrder.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-100' :
-                                            selectedOrder.status === 'Pending' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
-                                                'bg-green-50 text-green-600 border-green-100'
+                                    <span className={`inline-block text-xs px-2 py-1 rounded-md font-medium border ${selectedOrder.status === 'PACKED' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                        selectedOrder.status === 'OUT_FOR_DELIVERY' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                            selectedOrder.status === 'DELIVERED' ? 'bg-green-50 text-green-600 border-green-100' :
+                                                'bg-red-50 text-red-600 border-red-100'
                                         }`}>
                                         {selectedOrder.status}
                                     </span>
                                 </div>
                                 <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Priority</p>
-                                    <p className="text-sm font-bold text-gray-700">{selectedOrder.priority}</p>
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Amount</p>
+                                    <p className="text-sm font-bold text-gray-700">{selectedOrder.totalAmount}</p>
                                 </div>
                             </div>
 
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
                                 <div className="flex items-center text-sm text-gray-700">
                                     <MapPin className="w-4 h-4 mr-2 text-gray-400" />
-                                    <span>1234 Delivery Lane, Logistics City</span>
+                                    <span>{selectedOrder.shippingAddress || 'No Address Provided'}</span>
                                 </div>
                                 <div className="flex items-center text-sm text-gray-700">
                                     <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                                    <span>+971 50 123 4567</span>
+                                    <span>{selectedOrder.customerPhone || 'No Phone'}</span>
                                 </div>
                             </div>
 
@@ -361,7 +420,7 @@ export function DeliveryDashboardPage() {
                         </div>
                         <div className="p-6">
                             <p className="text-gray-600 text-sm mb-4">
-                                Are you sure you want to start the delivery for order <strong>{selectedOrder.id}</strong>? This will update the status to "In Transit".
+                                Are you sure you want to start the delivery for order <strong>{selectedOrder.orderNumber}</strong>? This will update the status to "Out For Delivery".
                             </p>
 
                             <div className="flex gap-3">
