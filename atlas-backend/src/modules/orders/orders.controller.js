@@ -286,7 +286,12 @@ const updateOrderStatus = async (req, res) => {
             } else if (nextStatus === 'PACKED') {
                 await tx.packagingTask.update({
                     where: { orderId: ord.id },
-                    data: { completedAt: new Date() }
+                    data: { 
+                        completedAt: new Date(),
+                        weight: req.body.weight ? parseFloat(req.body.weight) : undefined,
+                        qualityCheck: req.body.qualityCheck || undefined,
+                        notes: req.body.notes || undefined
+                    }
                 });
             } else if (nextStatus === 'OUT_FOR_DELIVERY') {
                 await tx.deliveryTask.create({

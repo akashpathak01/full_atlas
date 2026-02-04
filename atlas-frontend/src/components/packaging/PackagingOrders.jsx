@@ -1,7 +1,106 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ScanLine, Info, HelpCircle, Package, ArrowRight, Eye, Printer, CheckSquare, Home, List, Box, RefreshCw } from 'lucide-react';
+import { Search, Filter, ScanLine, Info, HelpCircle, Package, ArrowRight, Eye, Printer, CheckSquare, Home, List, Box, RefreshCw, X, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
+
+function CompletePackagingModal({ order, onClose, onSuccess }) {
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        weight: '',
+        qualityCheck: 'PASSED',
+        notes: ''
+    });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await api.patch(`/orders/${order.id}/status`, { 
+                status: 'PACKED',
+                ...formData 
+            });
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Failed to complete packaging:', error);
+            alert('Failed to complete packaging. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <form onSubmit={handleSubmit} className="bg-white rounded-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center text-orange-600">
+                    <div className="flex items-center gap-2">
+                        <CheckSquare className="w-5 h-5" />
+                        <h2 className="text-xl font-bold">Complete Packaging</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Package Weight (kg)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            required
+                            placeholder="e.g. 1.5"
+                            value={formData.weight}
+                            onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Quality Check</label>
+                        <select 
+                            value={formData.qualityCheck}
+                            onChange={(e) => setFormData({ ...formData, qualityCheck: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                        >
+                            <option value="PASSED">Passed ✅</option>
+                            <option value="CONDITIONAL">Conditional ⚠️</option>
+                            <option value="FAILED">Failed ❌</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Notes (Optional)</label>
+                        <textarea
+                            value={formData.notes}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 h-20 resize-none"
+                            placeholder="Add any specific notes about the packaging..."
+                        />
+                    </div>
+                </div>
+
+                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-gray-700 font-bold hover:bg-gray-100 rounded-lg transition-all"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        type="submit"
+                        disabled={loading}
+                        className="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 shadow-md active:scale-95 transition-all"
+                    >
+                        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Complete Packaging
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
 
 export function PackagingOrders() {
     const navigate = useNavigate();
@@ -9,6 +108,8 @@ export function PackagingOrders() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('ALL');
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [showCompleteModal, setShowCompleteModal] = useState(false);
 
     const fetchOrders = async () => {
         try {
@@ -22,9 +123,9 @@ export function PackagingOrders() {
         }
     };
 
-    const handleUpdateStatus = async (orderId, newStatus) => {
+    const handleUpdateStatus = async (orderId, newStatus, data = {}) => {
         try {
-            await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+            await api.patch(`/orders/${orderId}/status`, { status: newStatus, ...data });
             fetchOrders(); // Refresh list
         } catch (error) {
             console.error(`Failed to update status to ${newStatus}:`, error);
@@ -203,7 +304,10 @@ export function PackagingOrders() {
 
                                                         {order.status === 'IN_PACKAGING' && (
                                                             <button
-                                                                onClick={() => handleUpdateStatus(order.id, 'PACKED')}
+                                                                onClick={() => {
+                                                                    setSelectedOrder(order);
+                                                                    setShowCompleteModal(true);
+                                                                }}
                                                                 className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 shadow-sm transition-colors flex items-center gap-1"
                                                             >
                                                                 <CheckSquare className="w-3 h-3" /> Done
@@ -275,6 +379,17 @@ export function PackagingOrders() {
                     </div>
                 </div>
             </div>
+
+            {showCompleteModal && selectedOrder && (
+                <CompletePackagingModal 
+                    order={selectedOrder} 
+                    onClose={() => {
+                        setShowCompleteModal(false);
+                        setSelectedOrder(null);
+                    }} 
+                    onSuccess={fetchOrders} 
+                />
+            )}
         </div>
     );
 }

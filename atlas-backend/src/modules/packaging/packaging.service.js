@@ -58,14 +58,19 @@ const listTasks = async (user) => {
     });
 };
 
-const completeTask = async (taskId, agentId, user) => {
+const completeTask = async (taskId, agentId, user, data = {}) => {
     const task = await validateCompletion(taskId, agentId);
 
     const updatedTask = await prisma.$transaction(async (tx) => {
         // 1. Mark task as completed
         const updatedTask = await tx.packagingTask.update({
             where: { id: parseInt(taskId) },
-            data: { completedAt: new Date() }
+            data: { 
+                completedAt: new Date(),
+                weight: data.weight ? parseFloat(data.weight) : undefined,
+                qualityCheck: data.qualityCheck || undefined,
+                notes: data.notes || undefined
+            }
         });
 
         // 2. Update Order status to PACKED
@@ -82,10 +87,120 @@ const completeTask = async (taskId, agentId, user) => {
         entityType: 'ORDER',
         entityId: task.orderId,
         user,
-        metadata: { taskId: updatedTask.id }
+        metadata: { 
+            taskId: updatedTask.id,
+            weight: updatedTask.weight,
+            qualityCheck: updatedTask.qualityCheck
+        }
     });
 
     return updatedTask;
+};
+
+const getReports = async (user, period = 'today') => {
+    const { role, id: userId } = user;
+    
+    // Scoping
+    let agentScope = {};
+    if (role === 'PACKAGING_AGENT') {
+        const agent = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { createdById: true }
+        });
+        if (agent?.createdById) {
+            agentScope = { agent: { createdById: agent.createdById } };
+        }
+    } else if (role === 'ADMIN') {
+        agentScope = { agent: { createdById: userId } };
+    }
+
+    // Date filtering
+    const now = new Date();
+    let startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+
+    if (period === '7d') {
+        startDate.setDate(now.getDate() - 7);
+    } else if (period === '30d') {
+        startDate.setDate(now.getDate() - 30);
+    }
+
+    const tasks = await prisma.packagingTask.findMany({
+        where: {
+            completedAt: { gte: startDate },
+            ...(role === 'PACKAGING_AGENT' ? { agentId: userId } : agentScope)
+        },
+        orderBy: { completedAt: 'asc' }
+    });
+
+    const totalPackages = tasks.length;
+    const qualityChecks = tasks.filter(t => t.qualityCheck).length;
+    const passed = tasks.filter(t => t.qualityCheck === 'PASSED').length;
+    const conditional = tasks.filter(t => t.qualityCheck === 'CONDITIONAL').length;
+    const failed = tasks.filter(t => t.qualityCheck === 'FAILED').length;
+    
+    const passRate = qualityChecks > 0 ? ((passed / qualityChecks) * 100).toFixed(1) : 0;
+
+    // Avg Duration calculation
+    let totalDuration = 0;
+    let durationCount = 0;
+    tasks.forEach(t => {
+        if (t.completedAt && t.assignedAt) {
+            const diff = (t.completedAt - t.assignedAt) / (1000 * 60); // minutes
+            totalDuration += diff;
+            durationCount++;
+        }
+    });
+    const avgDuration = durationCount > 0 ? (totalDuration / durationCount).toFixed(1) : 0;
+
+    // Weight Stats
+    const weights = tasks.filter(t => t.weight !== null).map(t => t.weight);
+    const avgWeight = weights.length > 0 ? (weights.reduce((a, b) => a + b, 0) / weights.length).toFixed(2) : 0;
+    const minWeight = weights.length > 0 ? Math.min(...weights).toFixed(2) : 0;
+    const maxWeight = weights.length > 0 ? Math.max(...weights).toFixed(2) : 0;
+
+    // Daily Activity
+    const dailyMap = {};
+    tasks.forEach(t => {
+        const dateStr = t.completedAt.toISOString().split('T')[0];
+        if (!dailyMap[dateStr]) {
+            dailyMap[dateStr] = { date: dateStr, packages: 0, checks: 0, totalDuration: 0, durationCount: 0 };
+        }
+        dailyMap[dateStr].packages++;
+        if (t.qualityCheck) dailyMap[dateStr].checks++;
+        if (t.completedAt && t.assignedAt) {
+            const diff = (t.completedAt - t.assignedAt) / (1000 * 60);
+            dailyMap[dateStr].totalDuration += diff;
+            dailyMap[dateStr].durationCount++;
+        }
+    });
+
+    const dailyActivity = Object.values(dailyMap).map(d => ({
+        date: d.date,
+        packages: d.packages,
+        checks: d.checks,
+        avgTime: d.durationCount > 0 ? (d.totalDuration / d.durationCount).toFixed(1) : 0
+    }));
+
+    return {
+        stats: {
+            totalPackages,
+            avgDuration,
+            qualityChecks,
+            passRate
+        },
+        qualityResults: {
+            passed,
+            conditional,
+            failed
+        },
+        weightStats: {
+            avgWeight,
+            minWeight,
+            maxWeight
+        },
+        dailyActivity
+    };
 };
 
 const getDashboardStats = async (user) => {
@@ -271,5 +386,6 @@ module.exports = {
     listMaterials,
     createMaterial,
     updateMaterial,
-    deleteMaterial
+    deleteMaterial,
+    getReports
 };

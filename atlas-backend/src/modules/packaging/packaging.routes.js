@@ -8,6 +8,7 @@ router.post('/assign', verifyToken, authorizeRoles('ADMIN'), packagingController
 router.get('/tasks', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.listTasks);
 router.get('/dashboard', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'PACKAGING_AGENT'), packagingController.getDashboardStats);
 router.patch('/tasks/:id/complete', verifyToken, authorizeRoles('PACKAGING_AGENT'), packagingController.completeTask);
+router.get('/reports', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.getReports);
 
 // Materials Routes
 router.get('/materials', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.listMaterials);

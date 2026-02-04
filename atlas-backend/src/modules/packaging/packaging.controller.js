@@ -28,7 +28,7 @@ const completeTask = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const task = await packagingService.completeTask(id, req.user.id, req.user);
+        const task = await packagingService.completeTask(id, req.user.id, req.user, req.body);
 
         res.json(task);
     } catch (error) {
@@ -84,6 +84,16 @@ const deleteMaterial = async (req, res) => {
     }
 };
 
+const getReports = async (req, res) => {
+    try {
+        const { period } = req.query;
+        const reports = await packagingService.getReports(req.user, period);
+        res.json(reports);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching reports', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
@@ -92,5 +102,6 @@ module.exports = {
     listMaterials,
     createMaterial,
     updateMaterial,
-    deleteMaterial
+    deleteMaterial,
+    getReports
 };
