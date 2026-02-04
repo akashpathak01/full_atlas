@@ -17,6 +17,7 @@ app.use('/api/products', require('./routes/product'));
 app.use('/api/stats', require('./modules/stats/stats.routes'));
 app.use('/api/audit-logs', require('./modules/audit-logs/auditLogs.routes'));
 app.use('/api/users', require('./modules/users/users.routes'));
+app.use('/api/call-center', require('./modules/call-center/callCenter.routes'));
 
 // Basic health check
 app.get('/health', (req, res) => {
