@@ -3,6 +3,6 @@ const router = express.Router();
 const statsController = require('./stats.controller');
 const { verifyToken, authorizeRoles } = require('../../middleware/auth');
 
-router.get('/admin', verifyToken, authorizeRoles(['SUPER_ADMIN']), statsController.getAdminStats);
+router.get('/admin', verifyToken, authorizeRoles(['SUPER_ADMIN', 'ADMIN']), statsController.getAdminStats);
 
 module.exports = router;
