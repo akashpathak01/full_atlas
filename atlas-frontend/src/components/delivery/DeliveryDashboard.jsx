@@ -1,14 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { Truck, CheckCircle, XCircle, Clock, AlertCircle, RotateCcw, List, Users, Play } from 'lucide-react';
 
 export function DeliveryDashboard({ onNavigate }) {
+    const [dashboardStats, setDashboardStats] = useState({
+        total: 0,
+        completed: 0,
+        cancelled: 0,
+        pending: 0,
+        pendingConfirmations: 0
+    });
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get('http://localhost:5000/api/delivery/stats', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.data) {
+                    setDashboardStats(res.data);
+                }
+            } catch (error) {
+                console.error("Error fetching admin delivery stats:", error);
+            }
+        };
+        fetchStats();
+    }, []);
+
     // Mock data for dashboard
     const stats = [
-        { label: 'Total Orders', value: '0', icon: Truck, color: 'text-blue-600', bg: 'bg-blue-100' },
-        { label: 'Completed', value: '0', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
-        { label: 'Cancelled', value: '0', icon: XCircle, color: 'text-red-600', bg: 'bg-red-100' },
-        { label: 'Pending', value: '0', icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100' },
-        { label: 'Pending Confirmations', value: '0', icon: AlertCircle, color: 'text-orange-600', bg: 'bg-orange-100' },
+        { label: 'Total Orders', value: dashboardStats.total || 0, icon: Truck, color: 'text-blue-600', bg: 'bg-blue-100' },
+        { label: 'Completed', value: dashboardStats.completed || 0, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
+        { label: 'Cancelled', value: dashboardStats.cancelled || 0, icon: XCircle, color: 'text-red-600', bg: 'bg-red-100' },
+        { label: 'Pending', value: dashboardStats.pending || 0, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100' },
+        { label: 'Pending Confirmations', value: dashboardStats.pendingConfirmations || 0, icon: AlertCircle, color: 'text-orange-600', bg: 'bg-orange-100' },
     ];
 
     return (
@@ -88,8 +114,8 @@ export function DeliveryDashboard({ onNavigate }) {
                                 <List className="w-3 h-3" /> Filter
                             </button>
                         </div>
-                        <div className="text-sm text-gray-600">Total Orders: <span className="font-semibold">0</span></div>
-                        <div className="text-sm text-green-600">Completed: <span className="font-semibold">0</span></div>
+                        <div className="text-sm text-gray-600">Total Orders: <span className="font-semibold">{dashboardStats.total}</span></div>
+                        <div className="text-sm text-green-600">Completed: <span className="font-semibold">{dashboardStats.completed}</span></div>
                     </div>
                 </div>
             </div>
@@ -104,7 +130,7 @@ export function DeliveryDashboard({ onNavigate }) {
                         onClick={() => onNavigate('pending-confirmations')}
                         className="px-4 py-2 bg-orange-100 text-orange-800 font-medium rounded-lg hover:bg-orange-200 flex items-center gap-2"
                     >
-                        <AlertCircle className="w-4 h-4" /> Pending Confirmations (0)
+                        <AlertCircle className="w-4 h-4" /> Pending Confirmations ({dashboardStats.pendingConfirmations})
                     </button>
                     <button
                         onClick={() => onNavigate('returned-orders')}

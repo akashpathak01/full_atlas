@@ -153,7 +153,31 @@ const getDeliveryOrders = async (user) => {
 };
 
 const getStats = async (user) => {
-    const { id: userId } = user;
+    const { id: userId, role } = user;
+
+    if (role === 'ADMIN') {
+        // Admin Stats logic
+        const orders = await prisma.order.findMany({
+            where: {
+                seller: { adminId: userId }
+            },
+            select: { status: true }
+        });
+
+        const total = orders.length;
+        const completed = orders.filter(o => o.status === 'DELIVERED').length;
+        const cancelled = orders.filter(o => o.status === 'CANCELLED').length;
+        const pending = orders.filter(o => ['PACKED', 'OUT_FOR_DELIVERY'].includes(o.status)).length;
+        const pendingConfirmations = orders.filter(o => o.status === 'PENDING_REVIEW').length;
+
+        return {
+            total,
+            completed,
+            cancelled,
+            pending,
+            pendingConfirmations
+        };
+    }
 
     // Agent's performance stats from DeliveryTasks
     const tasks = await prisma.deliveryTask.findMany({
