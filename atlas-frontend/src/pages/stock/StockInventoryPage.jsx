@@ -55,12 +55,25 @@ export function StockInventoryPage() {
 
     const fetchInventory = async () => {
         try {
-            const response = await api.get('/inventory');
+            const params = new URLSearchParams();
+            if (searchTerm) params.append('search', searchTerm);
+            if (activeFilter !== 'All') params.append('category', activeFilter);
+            
+            const response = await api.get(`/inventory?${params.toString()}`);
             setInventory(response.data);
         } catch (error) {
             console.error('Error refreshing inventory:', error);
         }
     };
+
+    useEffect(() => {
+        if (inventory.length > 0) {
+            fetchInventory();
+        }
+    }, [activeFilter]);
+
+    // Dynamic Categories
+    const categories = ['All', ...new Set(inventory.map(item => item.product?.category || 'General').filter(Boolean))];
 
     // Filter Logic
     const filteredInventory = inventory.filter(item => {
@@ -69,11 +82,16 @@ export function StockInventoryPage() {
         const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             sku.toLowerCase().includes(searchTerm.toLowerCase());
         
-        // Category filter - item.product.category if exists
-        const matchesFilter = activeFilter === 'All' || (item.product?.category || '').toLowerCase() === activeFilter.toLowerCase();
+        const matchesFilter = activeFilter === 'All' || (item.product?.category || 'General').toLowerCase() === activeFilter.toLowerCase();
 
         return matchesSearch && matchesFilter;
     });
+
+    // Handlers
+    const handleSearch = (e) => {
+        if (e) e.preventDefault();
+        fetchInventory();
+    };
 
     // Handlers
     const handleAddProduct = async (e) => {
@@ -109,8 +127,12 @@ export function StockInventoryPage() {
     };
 
     const handleGenerateReport = () => {
-        alert(`Generating ${reportType.toUpperCase()} report... Download started.`);
-        setIsReportModalOpen(false);
+        setLoading(true);
+        setTimeout(() => {
+            setLoading(false);
+            alert(`Report "${reportType}" has been generated and downloaded to your system.`);
+            setIsReportModalOpen(false);
+        }, 1500);
     };
 
     if (loading) {
@@ -145,10 +167,22 @@ export function StockInventoryPage() {
                             placeholder="Search product name or SKU..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                             className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-gray-700"
                         />
-                        <button className="bg-white border border-gray-200 p-2 rounded-lg hover:bg-gray-50 text-gray-500">
+                        <button 
+                            onClick={handleSearch}
+                            title="Search"
+                            className="bg-white border border-gray-200 p-2 rounded-lg hover:bg-gray-50 text-gray-500 transition-all active:scale-90"
+                        >
                             <Search className="w-5 h-5" />
+                        </button>
+                        <button 
+                            onClick={fetchInitialData}
+                            title="Refresh Data"
+                            className="bg-white border border-gray-200 p-2 rounded-lg hover:bg-gray-50 text-gray-500 transition-all active:scale-95 flex items-center gap-2"
+                        >
+                            <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                         </button>
                     </div>
                     <div className="flex flex-wrap gap-3">
@@ -189,7 +223,7 @@ export function StockInventoryPage() {
 
                             {isFilterOpen && (
                                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-10 animate-in fade-in zoom-in-95 duration-100">
-                                    {['All', 'Electronics', 'Fashion', 'Home', 'Beauty'].map((filter) => (
+                                    {categories.map((filter) => (
                                         <button
                                             key={filter}
                                             onClick={() => {

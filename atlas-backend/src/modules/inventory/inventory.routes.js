@@ -5,7 +5,7 @@ const requireAuth = require('../../middlewares/auth.middleware');
 const requireRole = require('../../middlewares/role.middleware');
 
 // Warehouse Routes
-router.post('/warehouses', requireAuth, requireRole(['ADMIN']), inventoryController.createWarehouse);
+router.post('/warehouses', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER']), inventoryController.createWarehouse);
 router.get('/warehouses', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER']), inventoryController.listWarehouses);
 
 // Inventory Routes

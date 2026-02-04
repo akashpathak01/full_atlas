@@ -4,7 +4,7 @@ const { getOrders, getOrderById, createOrder, updateOrderStatus, getPackagingOrd
 const { getDeliveryOrders } = require('../modules/delivery/delivery.controller');
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
 
-router.get('/packaging', verifyToken, getPackagingOrders);
+router.get('/packaging', verifyToken, authorizeRoles(['PACKAGING_AGENT', 'STOCK_KEEPER', 'ADMIN', 'SUPER_ADMIN']), getPackagingOrders);
 router.get('/delivery', verifyToken, authorizeRoles(['DELIVERY_AGENT', 'ADMIN']), getDeliveryOrders);
 router.get('/', verifyToken, getOrders);
 router.post('/', verifyToken, createOrder);

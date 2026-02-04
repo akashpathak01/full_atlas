@@ -12,12 +12,12 @@ export function StockDashboardPage() {
 
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [filter]);
 
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/inventory/dashboard');
+            const response = await api.get(`/inventory/dashboard?period=${filter}`);
             setDashboardData(response.data);
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
