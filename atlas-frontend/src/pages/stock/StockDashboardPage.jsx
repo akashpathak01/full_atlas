@@ -1,13 +1,30 @@
-
-import React, { useState } from 'react';
-import { stockDashboardData } from '../../data/stockDummyData';
-import { Home, Package, Box, Warehouse, AlertTriangle, XCircle, ClipboardList, CheckCircle, X, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
+import { Home, Package, Box, Warehouse, AlertTriangle, XCircle, ClipboardList, CheckCircle, X, Calendar, Loader2 } from 'lucide-react';
 
 export function StockDashboardPage() {
     const [showBanner, setShowBanner] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [dashboardData, setDashboardData] = useState(null);
     const [filter, setFilter] = useState('All Time');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/inventory/dashboard');
+            setDashboardData(response.data);
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleApplyRange = (e) => {
         e.preventDefault();
@@ -16,6 +33,29 @@ export function StockDashboardPage() {
             setIsModalOpen(false);
         }
     };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-slate-50">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Loading Dashboard Data...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!dashboardData) {
+        return (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100 m-8 shadow-sm">
+                <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                <p className="text-slate-900 font-black text-lg">Failed to load dashboard data.</p>
+                <button onClick={fetchDashboardData} className="mt-4 text-blue-600 font-bold hover:underline">Try Again</button>
+            </div>
+        );
+    }
+
+    const { stats, stockStatus, warehouseStats } = dashboardData;
 
     return (
         <div className="space-y-6 relative">
@@ -99,7 +139,7 @@ export function StockDashboardPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                     <div>
                         <p className="text-gray-500 text-sm font-medium mb-1">Total Products</p>
-                        <h3 className="text-4xl font-bold text-gray-900">{stockDashboardData.stats.totalProducts}</h3>
+                        <h3 className="text-4xl font-bold text-gray-900">{stats.totalProducts}</h3>
                     </div>
                     <div className="p-4 bg-blue-100 rounded-xl">
                         <Package className="w-8 h-8 text-blue-600" />
@@ -108,7 +148,7 @@ export function StockDashboardPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                     <div>
                         <p className="text-gray-500 text-sm font-medium mb-1">Total Pieces</p>
-                        <h3 className="text-4xl font-bold text-gray-900">{stockDashboardData.stats.totalPieces}</h3>
+                        <h3 className="text-4xl font-bold text-gray-900">{stats.totalPieces}</h3>
                     </div>
                     <div className="p-4 bg-green-100 rounded-xl">
                         <Box className="w-8 h-8 text-green-600" />
@@ -117,7 +157,7 @@ export function StockDashboardPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                     <div>
                         <p className="text-gray-500 text-sm font-medium mb-1">Warehouses</p>
-                        <h3 className="text-4xl font-bold text-gray-900">{stockDashboardData.stats.warehouses}</h3>
+                        <h3 className="text-4xl font-bold text-gray-900">{stats.warehouses}</h3>
                     </div>
                     <div className="p-4 bg-orange-100 rounded-xl">
                         <Warehouse className="w-8 h-8 text-orange-600" />
@@ -126,7 +166,7 @@ export function StockDashboardPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                     <div>
                         <p className="text-gray-500 text-sm font-medium mb-1">Near Expiry</p>
-                        <h3 className="text-4xl font-bold text-gray-900">{stockDashboardData.stats.nearExpiry}</h3>
+                        <h3 className="text-4xl font-bold text-gray-900">{stats.nearExpiry}</h3>
                     </div>
                     <div className="p-4 bg-yellow-100 rounded-xl">
                         <AlertTriangle className="w-8 h-8 text-yellow-600" />
@@ -135,7 +175,7 @@ export function StockDashboardPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                     <div>
                         <p className="text-gray-500 text-sm font-medium mb-1">Out of Stock</p>
-                        <h3 className="text-4xl font-bold text-gray-900">{stockDashboardData.stats.outOfStock}</h3>
+                        <h3 className="text-4xl font-bold text-gray-900">{stats.outOfStock}</h3>
                     </div>
                     <div className="p-4 bg-red-100 rounded-xl">
                         <XCircle className="w-8 h-8 text-red-600" />
@@ -144,7 +184,7 @@ export function StockDashboardPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                     <div>
                         <p className="text-gray-500 text-sm font-medium mb-1">Orders Awaiting Pick</p>
-                        <h3 className="text-4xl font-bold text-gray-900">{stockDashboardData.stats.ordersAwaitingPick}</h3>
+                        <h3 className="text-4xl font-bold text-gray-900">{stats.ordersAwaitingPick}</h3>
                     </div>
                     <div className="p-4 bg-purple-100 rounded-xl">
                         <ClipboardList className="w-8 h-8 text-purple-600" />
@@ -160,7 +200,7 @@ export function StockDashboardPage() {
                         {/* Simple Donut Chart Representation using CSS */}
                         <div className="relative w-48 h-48 rounded-full border-[16px] border-emerald-500 flex items-center justify-center">
                             <div className="text-center">
-                                <span className="block text-2xl font-bold text-gray-900">{stockDashboardData.stockStatus.totalItems}</span>
+                                <span className="block text-2xl font-bold text-gray-900">{stockStatus.totalItems}</span>
                                 <span className="text-gray-500 text-xs">Total Items</span>
                             </div>
                         </div>
@@ -168,9 +208,21 @@ export function StockDashboardPage() {
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm min-h-[400px]">
                     <h3 className="text-lg font-bold text-gray-900 mb-6">Quantities by Warehouse</h3>
-                    <div className="flex items-center justify-center h-64 text-gray-400">
-                        {/* Empty chart placeholder */}
-                        <p>Chart data will appear here</p>
+                    <div className="flex flex-col justify-end h-64 space-y-4">
+                        {warehouseStats.map((w, i) => (
+                            <div key={i} className="space-y-1">
+                                <div className="flex justify-between text-xs font-bold">
+                                    <span className="text-gray-600 uppercase tracking-tighter">{w.name}</span>
+                                    <span className="text-gray-900">{w.quantity} pcs</span>
+                                </div>
+                                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-blue-500 transition-all duration-1000"
+                                        style={{ width: `${stats.totalPieces > 0 ? (w.quantity / stats.totalPieces) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

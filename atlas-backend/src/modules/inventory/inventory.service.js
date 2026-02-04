@@ -137,11 +137,65 @@ const getMovementHistory = async () => {
     });
 };
 
+const getDashboardStats = async () => {
+    const totalProducts = await prisma.product.count();
+    const totalInventory = await prisma.inventory.aggregate({
+        _sum: { quantity: true }
+    });
+    const totalPieces = totalInventory._sum.quantity || 0;
+
+    const warehousesCount = await prisma.warehouse.count();
+
+    const outOfStockCount = await prisma.inventory.count({
+        where: { quantity: 0 }
+    });
+
+    const ordersAwaitingPick = 0; // Placeholder for now, could link to PackagingTask if needed
+
+    // For "Stock Status" chart - breakdown by quantity categories
+    const inventoryData = await prisma.inventory.findMany({
+        select: { quantity: true }
+    });
+
+    const stockStatus = {
+        totalItems: totalPieces,
+        available: inventoryData.filter(i => i.quantity > 0).length,
+        outOfStock: inventoryData.filter(i => i.quantity === 0).length
+    };
+
+    // Quantities by Warehouse
+    const warehouseStats = await prisma.inventory.groupBy({
+        by: ['warehouseId'],
+        _sum: { quantity: true }
+    });
+    
+    // Fetch warehouse names for grouping
+    const warehouses = await prisma.warehouse.findMany();
+    const chartData = warehouses.map(w => ({
+        name: w.name,
+        quantity: warehouseStats.find(s => s.warehouseId === w.id)?._sum.quantity || 0
+    }));
+
+    return {
+        stats: {
+            totalProducts,
+            totalPieces,
+            warehouses: warehousesCount,
+            nearExpiry: 0, // No field in schema yet
+            outOfStock: outOfStockCount,
+            ordersAwaitingPick
+        },
+        stockStatus,
+        warehouseStats: chartData
+    };
+};
+
 module.exports = {
     createWarehouse,
     listWarehouses,
     getInventory,
     stockIn,
     stockOut,
-    getMovementHistory
+    getMovementHistory,
+    getDashboardStats
 };

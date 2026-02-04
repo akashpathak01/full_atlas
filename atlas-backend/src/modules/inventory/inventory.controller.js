@@ -82,6 +82,16 @@ const updateStock = async (req, res) => {
     }
 };
 
+const getDashboardStats = async (req, res) => {
+    try {
+        const stats = await inventoryService.getDashboardStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching inventory dashboard stats:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     createWarehouse,
     listWarehouses,
@@ -89,5 +99,6 @@ module.exports = {
     updateStock,
     stockIn,
     stockOut,
-    getMovementHistory
+    getMovementHistory,
+    getDashboardStats
 };

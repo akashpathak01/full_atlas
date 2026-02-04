@@ -1,12 +1,15 @@
-
-import React, { useState } from 'react';
-import { stockInventoryData } from '../../data/stockDummyData';
-import { Home, Package, Search, Plus, FileText, Calendar, Filter, Image as ImageIcon, X, ChevronDown, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
+import { Home, Package, Search, Plus, FileText, Calendar, Filter, Image as ImageIcon, X, ChevronDown, Check, Loader2 } from 'lucide-react';
 
 export function StockInventoryPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('All');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [inventory, setInventory] = useState([]);
+    const [products, setProducts] = useState([]);
+    const [warehouses, setWarehouses] = useState([]);
 
     // Modal States
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -17,45 +20,79 @@ export function StockInventoryPage() {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [activePeriod, setActivePeriod] = useState(null);
 
-    // Add Inventory Form State - Updated to match screenshot
+    // Add Inventory Form State
     const [newProduct, setNewProduct] = useState({
-        product: '',
-        warehouse: '',
+        productId: '',
+        warehouseId: '',
         quantity: '',
-        cartons: '0',
-        location: '',
-        status: 'Available',
-        expiryDate: '',
-        sourcingRef: ''
+        reason: 'Regular Stock In'
     });
 
     // Report Form State
     const [reportType, setReportType] = useState('inventory');
 
+    useEffect(() => {
+        fetchInitialData();
+    }, []);
+
+    const fetchInitialData = async () => {
+        setLoading(true);
+        try {
+            const [invRes, prodRes, whRes] = await Promise.all([
+                api.get('/inventory'),
+                api.get('/products'), // Need to check if this endpoint exists and return what we need
+                api.get('/inventory/warehouses')
+            ]);
+            setInventory(invRes.data);
+            setProducts(prodRes.data.products || prodRes.data); 
+            setWarehouses(whRes.data);
+        } catch (error) {
+            console.error('Error fetching inventory data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchInventory = async () => {
+        try {
+            const response = await api.get('/inventory');
+            setInventory(response.data);
+        } catch (error) {
+            console.error('Error refreshing inventory:', error);
+        }
+    };
+
     // Filter Logic
-    const filteredProducts = stockInventoryData.products.filter(product => {
-        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = activeFilter === 'All' || product.category.toLowerCase() === activeFilter.toLowerCase();
+    const filteredInventory = inventory.filter(item => {
+        const name = item.product?.name || '';
+        const sku = item.product?.sku || '';
+        const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            sku.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Category filter - item.product.category if exists
+        const matchesFilter = activeFilter === 'All' || (item.product?.category || '').toLowerCase() === activeFilter.toLowerCase();
 
         return matchesSearch && matchesFilter;
     });
 
     // Handlers
-    const handleAddProduct = (e) => {
+    const handleAddProduct = async (e) => {
         e.preventDefault();
-        alert('Product Added Successfully! (Simulation)');
-        setIsAddModalOpen(false);
-        setNewProduct({
-            product: '',
-            warehouse: '',
-            quantity: '',
-            cartons: '0',
-            location: '',
-            status: 'Available',
-            expiryDate: '',
-            sourcingRef: ''
-        });
+        try {
+            await api.post('/inventory/in', newProduct);
+            alert('Stock added successfully!');
+            setIsAddModalOpen(false);
+            setNewProduct({
+                productId: '',
+                warehouseId: '',
+                quantity: '',
+                reason: 'Regular Stock In'
+            });
+            fetchInventory();
+        } catch (error) {
+            console.error('Error adding stock:', error);
+            alert(`Failed to add stock: ${error.response?.data?.message || error.message}`);
+        }
     };
 
     const handleApplyPeriod = (e) => {
@@ -66,15 +103,23 @@ export function StockInventoryPage() {
         }
     };
 
+    const clearPeriod = () => {
+        setActivePeriod(null);
+        setDateRange({ start: '', end: '' });
+    };
+
     const handleGenerateReport = () => {
         alert(`Generating ${reportType.toUpperCase()} report... Download started.`);
         setIsReportModalOpen(false);
     };
 
-    const clearPeriod = () => {
-        setActivePeriod(null);
-        setDateRange({ start: '', end: '' });
-    };
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 relative">
@@ -182,8 +227,8 @@ export function StockInventoryPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {filteredProducts.length > 0 ? (
-                                    filteredProducts.map((product, idx) => (
+                                {filteredInventory.length > 0 ? (
+                                    filteredInventory.map((item, idx) => (
                                         <tr key={idx} className="hover:bg-gray-50 transition-colors">
                                             <td className="p-4">
                                                 <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
@@ -193,14 +238,14 @@ export function StockInventoryPage() {
                                                     <ImageIcon className="w-5 h-5 text-gray-400" />
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 font-medium text-gray-900">{product.id}</td>
-                                            <td className="px-6 py-4 font-bold text-gray-900">{product.name}</td>
-                                            <td className="px-6 py-4 text-gray-500 font-mono text-xs">{product.sku}</td>
-                                            <td className="px-6 py-4 text-gray-600">{product.seller}</td>
+                                            <td className="px-6 py-4 font-medium text-gray-900">{item.id}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900">{item.product?.name}</td>
+                                            <td className="px-6 py-4 text-gray-500 font-mono text-xs">{item.product?.sku}</td>
+                                            <td className="px-6 py-4 text-gray-600">{item.product?.seller?.shopName || 'Admin'}</td>
                                             <td className="px-6 py-4">
-                                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs capitalize">{product.category}</span>
+                                                <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs capitalize">{item.product?.category || 'General'}</span>
                                             </td>
-                                            <td className="px-6 py-4 font-bold text-gray-900">{product.qty}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900">{item.quantity}</td>
                                         </tr>
                                     ))
                                 ) : (
@@ -232,13 +277,15 @@ export function StockInventoryPage() {
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Product</label>
                                 <select
+                                    required
                                     className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                                    value={newProduct.product}
-                                    onChange={(e) => setNewProduct({ ...newProduct, product: e.target.value })}
+                                    value={newProduct.productId}
+                                    onChange={(e) => setNewProduct({ ...newProduct, productId: e.target.value })}
                                 >
                                     <option value="" disabled hidden>Select Product</option>
-                                    <option value="p1">Wireless Headphones</option>
-                                    <option value="p2">Smart Watch</option>
+                                    {products.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -246,86 +293,40 @@ export function StockInventoryPage() {
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Warehouse</label>
                                 <select
+                                    required
                                     className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                                    value={newProduct.warehouse}
-                                    onChange={(e) => setNewProduct({ ...newProduct, warehouse: e.target.value })}
+                                    value={newProduct.warehouseId}
+                                    onChange={(e) => setNewProduct({ ...newProduct, warehouseId: e.target.value })}
                                 >
                                     <option value="" disabled hidden>Select Warehouse</option>
-                                    <option value="main">Main Warehouse</option>
-                                    <option value="secondary">Secondary Warehouse</option>
+                                    {warehouses.map(w => (
+                                        <option key={w.id} value={w.id}>{w.name}</option>
+                                    ))}
                                 </select>
                             </div>
 
-                            {/* Quantity and Cartons Row */}
+                            {/* Quantity and Reason Row */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Quantity</label>
                                     <input
-                                        type="text"
+                                        type="number"
+                                        required
+                                        min="1"
                                         value={newProduct.quantity}
                                         onChange={(e) => setNewProduct({ ...newProduct, quantity: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Cartons</label>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Reason</label>
                                     <input
                                         type="text"
-                                        value={newProduct.cartons}
-                                        onChange={(e) => setNewProduct({ ...newProduct, cartons: e.target.value })}
+                                        value={newProduct.reason}
+                                        onChange={(e) => setNewProduct({ ...newProduct, reason: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                                     />
                                 </div>
-                            </div>
-
-                            {/* Location */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Location</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g., Aisle A, Shelf 3"
-                                    value={newProduct.location}
-                                    onChange={(e) => setNewProduct({ ...newProduct, location: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm placeholder-gray-400"
-                                />
-                            </div>
-
-                            {/* Status */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Status</label>
-                                <select
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                                    value={newProduct.status}
-                                    onChange={(e) => setNewProduct({ ...newProduct, status: e.target.value })}
-                                >
-                                    <option value="Available">Available</option>
-                                    <option value="Damaged">Damaged</option>
-                                    <option value="Reserved">Reserved</option>
-                                </select>
-                            </div>
-
-                            {/* Expiry Date */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Expiry Date</label>
-                                <input
-                                    type="date"
-                                    value={newProduct.expiryDate}
-                                    onChange={(e) => setNewProduct({ ...newProduct, expiryDate: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                                    placeholder="dd-mm-yyyy"
-                                />
-                            </div>
-
-                            {/* Sourcing Reference */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Sourcing Reference</label>
-                                <input
-                                    type="text"
-                                    placeholder="PO number or supplier reference"
-                                    value={newProduct.sourcingRef}
-                                    onChange={(e) => setNewProduct({ ...newProduct, sourcingRef: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm placeholder-gray-400"
-                                />
                             </div>
 
                             {/* Footer Buttons */}
@@ -334,7 +335,7 @@ export function StockInventoryPage() {
                                     type="submit"
                                     className="flex-grow bg-[#2563eb] hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-colors text-sm"
                                 >
-                                    Add to Inventory
+                                    Add Stock
                                 </button>
                                 <button
                                     type="button"

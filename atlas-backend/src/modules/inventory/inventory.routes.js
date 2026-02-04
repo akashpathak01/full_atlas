@@ -9,6 +9,7 @@ router.post('/warehouses', requireAuth, requireRole(['ADMIN']), inventoryControl
 router.get('/warehouses', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER']), inventoryController.listWarehouses);
 
 // Inventory Routes
+router.get('/dashboard', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER']), inventoryController.getDashboardStats);
 router.get('/', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER', 'SELLER']), inventoryController.getInventory);
 router.post('/in', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER']), inventoryController.stockIn);
 router.post('/out', requireAuth, requireRole(['ADMIN', 'STOCK_KEEPER']), inventoryController.stockOut);
