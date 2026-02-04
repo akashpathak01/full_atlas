@@ -12,7 +12,7 @@ const {
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
 
 // Warehouse Routes
-router.post('/warehouses', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN'), createWarehouse);
+router.post('/warehouses', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'STOCK_KEEPER'), createWarehouse);
 router.get('/warehouses', verifyToken, listWarehouses);
 
 // Inventory Routes
@@ -23,5 +23,6 @@ router.post('/update', verifyToken, authorizeRoles('STOCK_KEEPER', 'ADMIN'), upd
 router.post('/stock-in', verifyToken, authorizeRoles('STOCK_KEEPER', 'ADMIN', 'SELLER'), stockIn);
 router.post('/stock-out', verifyToken, authorizeRoles('STOCK_KEEPER', 'ADMIN', 'SELLER'), stockOut);
 router.get('/movements', verifyToken, authorizeRoles('STOCK_KEEPER', 'ADMIN'), getMovementHistory);
+router.get('/history', verifyToken, authorizeRoles('STOCK_KEEPER', 'ADMIN'), getMovementHistory);
 
 module.exports = router;

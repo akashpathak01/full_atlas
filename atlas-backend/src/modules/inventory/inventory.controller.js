@@ -25,7 +25,7 @@ const listWarehouses = async (req, res) => {
 
 const getInventory = async (req, res) => {
     try {
-        const inventory = await inventoryService.getInventory(req.user);
+        const inventory = await inventoryService.getInventory(req.user, req.query);
         res.json(inventory);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -53,7 +53,8 @@ const stockOut = async (req, res) => {
 
 const getMovementHistory = async (req, res) => {
     try {
-        const history = await inventoryService.getMovementHistory();
+        const { search, type } = req.query;
+        const history = await inventoryService.getMovementHistory(req.user, { search, type });
         res.json(history);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -82,6 +83,17 @@ const updateStock = async (req, res) => {
     }
 };
 
+const getDashboardStats = async (req, res) => {
+    try {
+        const { period } = req.query;
+        const stats = await inventoryService.getDashboardStats(period);
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching inventory dashboard stats:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     createWarehouse,
     listWarehouses,
@@ -89,5 +101,6 @@ module.exports = {
     updateStock,
     stockIn,
     stockOut,
-    getMovementHistory
+    getMovementHistory,
+    getDashboardStats
 };

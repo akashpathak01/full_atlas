@@ -224,23 +224,25 @@ const updateOrderStatus = async (req, res) => {
             if (!['CONFIRMED', 'CANCELLED'].includes(nextStatus)) {
                 return res.status(400).json({ message: 'Call Center can only CONFIRM or CANCEL.' });
             }
-        } else if (role === 'PACKAGING_AGENT') {
+        } else if (role === 'PACKAGING_AGENT' || role === 'STOCK_KEEPER') {
             if (activeStatus === 'CONFIRMED') {
                 if (nextStatus !== 'IN_PACKAGING') {
                     return res.status(400).json({ message: 'Can only move CONFIRMED orders to IN_PACKAGING.' });
                 }
             } else if (activeStatus === 'IN_PACKAGING') {
-                // Must be assigned to this agent
-                const task = await prisma.packagingTask.findUnique({ where: { orderId: parseInt(orderId) } });
-                if (!task || task.agentId !== req.user.id) {
-                    return res.status(403).json({ message: 'You are not assigned to this packaging task.' });
+                // If packaging agent, must be assigned
+                if (role === 'PACKAGING_AGENT') {
+                    const task = await prisma.packagingTask.findUnique({ where: { orderId: parseInt(orderId) } });
+                    if (!task || task.agentId !== req.user.id) {
+                        return res.status(403).json({ message: 'You are not assigned to this packaging task.' });
+                    }
                 }
 
                 if (nextStatus !== 'PACKED') {
                     return res.status(400).json({ message: 'Can only move IN_PACKAGING orders to PACKED.' });
                 }
             } else {
-                return res.status(400).json({ message: 'Invalid status for Packaging Agent.' });
+                return res.status(400).json({ message: 'Invalid status for this role.' });
             }
         } else if (role === 'DELIVERY_AGENT') {
             if (activeStatus === 'PACKED') {
@@ -260,10 +262,10 @@ const updateOrderStatus = async (req, res) => {
             } else {
                 return res.status(400).json({ message: 'Invalid status for Delivery Agent.' });
             }
+        } else if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
+            // Admins can transition to any logically valid next status
+            // For now, let's just bypass the specific role checks
         } else {
-            // Admin/Super Admin might want to force update? 
-            // For this scope, let's assume strict roles. Admin might get 403 here unless we add them.
-            // But requirement says "Enforce strict role-based access".
             return res.status(403).json({ message: 'Unauthorized. Role not allowed for this status update.' });
         }
 
@@ -324,22 +326,43 @@ const updateOrderStatus = async (req, res) => {
 const getPackagingOrders = async (req, res) => {
     const { role, id: userId } = req.user;
 
-    const allowedRoles = ['PACKAGING_AGENT', 'ADMIN', 'SUPER_ADMIN'];
+    const allowedRoles = ['PACKAGING_AGENT', 'STOCK_KEEPER', 'ADMIN', 'SUPER_ADMIN'];
     if (!allowedRoles.includes(role)) {
-        return res.status(403).json({ message: 'Unauthorized. Only Packaging Agents and Admins can access this endpoint.' });
+        return res.status(403).json({ message: 'Unauthorized. Only Packaging Agents, Stock Keepers and Admins can access this endpoint.' });
     }
 
     try {
         let where = {};
 
-        if (role === 'ADMIN') {
-            // Admin sees all packaging-relevant orders for their tenants
-            where = {
-                status: { in: ['CONFIRMED', 'IN_PACKAGING', 'PACKED'] },
-                seller: {
-                    adminId: userId
+        if (role === 'ADMIN' || role === 'STOCK_KEEPER') {
+            let adminId = userId;
+            let isGlobal = false;
+
+            if (role === 'STOCK_KEEPER') {
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { createdById: true }
+                });
+                
+                if (user?.createdById) {
+                    adminId = user.createdById;
+                } else {
+                    // If no creator, treat as global/central stock keeper
+                    isGlobal = true;
                 }
+            }
+
+            // Base where clause
+            where = {
+                status: { in: ['CONFIRMED', 'IN_PACKAGING', 'PACKED', 'Pending'] } // Added 'Pending' if that's what's in DB
             };
+
+            // Apply admin scoping if NOT global
+            if (!isGlobal) {
+                where.seller = {
+                    adminId: adminId
+                };
+            }
         } else if (role === 'SUPER_ADMIN') {
             // Super Admin sees everything
             where = {

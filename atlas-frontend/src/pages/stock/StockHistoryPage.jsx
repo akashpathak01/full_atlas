@@ -1,18 +1,40 @@
-
-import React, { useState } from 'react';
-import { Home, Search, Download, Filter, Inbox, X, Check, FileText, Sheet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Home, Search, Download, Filter, Inbox, X, Check, FileText, Sheet, Loader2, CheckCircle2 } from 'lucide-react';
+import api from '../../lib/api';
 
 export function StockHistoryPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [activeFilter, setActiveFilter] = useState('All');
+    const [loading, setLoading] = useState(false);
+    const [history, setHistory] = useState([]);
 
     // Export State
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportFormat, setExportFormat] = useState('csv');
 
-    const handleSearch = (e) => {
-        setSearchTerm(e.target.value);
+    useEffect(() => {
+        fetchHistory();
+    }, []);
+
+    const fetchHistory = async (filters = {}) => {
+        setLoading(true);
+        try {
+            const response = await api.get('/inventory/history', { params: filters });
+            setHistory(response.data);
+        } catch (error) {
+            console.error('Error fetching history:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSearch = () => {
+        fetchHistory({ search: searchTerm, type: activeFilter });
+    };
+
+    const handleRefresh = () => {
+        fetchHistory({ search: searchTerm, type: activeFilter });
     };
 
     const handleExportClick = () => {
@@ -31,7 +53,11 @@ export function StockHistoryPage() {
     const selectFilter = (filter) => {
         setActiveFilter(filter);
         setIsFilterOpen(false);
+        fetchHistory({ search: searchTerm, type: filter });
     };
+
+    // No longer need client-side filtering since server handles it
+    const displayHistory = history;
 
     return (
         <div className="space-y-6 relative">
@@ -45,7 +71,27 @@ export function StockHistoryPage() {
                 <span className="font-medium text-gray-900">Inventory Log</span>
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900">Stock History</h1>
+            <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-gray-900">Stock History</h1>
+                <button 
+                    onClick={handleRefresh}
+                    className={`p-2 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                    <svg
+                        className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                    </svg>
+                </button>
+            </div>
 
             {/* Controls */}
             <div className="flex flex-col md:flex-row gap-4">
@@ -53,11 +99,15 @@ export function StockHistoryPage() {
                     <input
                         type="text"
                         value={searchTerm}
-                        onChange={handleSearch}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         placeholder="Search history by ID, SKU, or user..."
-                        className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700"
+                        className="flex-1 px-4 py-2 border border-blue-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700 shadow-sm"
                     />
-                    <button className="bg-white border border-gray-200 p-2 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors">
+                    <button 
+                        onClick={handleSearch}
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-all active:scale-95 shadow-md"
+                    >
                         <Search className="w-5 h-5" />
                     </button>
                 </div>
@@ -81,7 +131,7 @@ export function StockHistoryPage() {
 
                         {isFilterOpen && (
                             <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-10 animate-in fade-in zoom-in-95 duration-100">
-                                {['All', 'Stock In', 'Stock Out', 'Adjustment', 'Transfer'].map((filter) => (
+                                {['All', 'Stock In', 'Stock Out'].map((filter) => (
                                     <button
                                         key={filter}
                                         onClick={() => selectFilter(filter)}
@@ -106,12 +156,34 @@ export function StockHistoryPage() {
                     <div>SKU</div>
                     <div className="col-span-2">Product</div>
                     <div>Quantity</div>
-                    <div className="col-span-1">User</div>
+                    <div className="col-span-1">Warehouse</div>
                 </div>
-                <div className="flex flex-col items-center justify-center p-16 text-gray-400">
-                    <Inbox className="w-12 h-12 mb-2 opacity-50" />
-                    <p className="font-medium text-sm">No records found matching "{activeFilter}"</p>
-                </div>
+                {displayHistory.length > 0 ? (
+                    <div className="divide-y divide-gray-100">
+                        {displayHistory.map((item) => (
+                            <div key={item.id} className="grid grid-cols-8 p-4 items-center hover:bg-gray-50 transition-colors text-sm">
+                                <div className="font-bold text-gray-900">#{item.id}</div>
+                                <div className="text-gray-500">{new Date(item.createdAt).toLocaleString()}</div>
+                                <div>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${item.type === 'IN' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                        {item.type}
+                                    </span>
+                                </div>
+                                <div className="font-mono text-gray-500">{item.inventory?.product?.sku}</div>
+                                <div className="col-span-2 font-medium text-gray-900">{item.inventory?.product?.name}</div>
+                                <div className={`font-bold ${item.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {item.type === 'IN' ? '+' : ''}{item.quantity}
+                                </div>
+                                <div className="text-gray-600">{item.inventory?.warehouse?.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center p-16 text-gray-400">
+                        <Inbox className="w-12 h-12 mb-2 opacity-50" />
+                        <p className="font-medium text-sm">No records found matching "{searchTerm || activeFilter}"</p>
+                    </div>
+                )}
             </div>
 
             {/* Export Modal */}
