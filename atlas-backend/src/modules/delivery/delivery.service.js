@@ -120,20 +120,17 @@ const getDeliveryOrders = async (user) => {
         select: { createdById: true }
     });
 
-    if (!agent || !agent.createdById) {
-        return [];
-    }
-    const adminId = agent.createdById;
+    const adminId = agent?.createdById;
 
     // 2. Fetch orders
-    // - PACKED (Unassigned) -> Available to pick up (scoped to Admin's tenants)
+    // - PACKED (Unassigned) -> Available to pick up (scoped to Admin's tenants if adminId exists, else all unassigned)
     // - OUT_FOR_DELIVERY / DELIVERED / DELIVERY_FAILED -> Assigned to THIS agent
     const orders = await prisma.order.findMany({
         where: {
             OR: [
                 {
                     status: 'PACKED',
-                    seller: { adminId: adminId }
+                    ...(adminId ? { seller: { adminId: adminId } } : {})
                 },
                 {
                     status: { in: ['OUT_FOR_DELIVERY', 'DELIVERED', 'DELIVERY_FAILED'] },
@@ -144,6 +141,7 @@ const getDeliveryOrders = async (user) => {
         include: {
             customer: true,
             deliveryTask: true,
+            items: true,
             seller: { include: { user: { select: { name: true } } } }
         },
         orderBy: { createdAt: 'desc' }
@@ -189,25 +187,56 @@ const getStats = async (user) => {
     const agent = await prisma.user.findUnique({ where: { id: userId }, select: { createdById: true } });
     let readyCount = 0;
 
-    if (agent && agent.createdById) {
-        readyCount = await prisma.order.count({
-            where: {
-                status: 'PACKED',
-                seller: { adminId: agent.createdById }
-            }
-        });
-    }
+    readyCount = await prisma.order.count({
+        where: {
+            status: 'PACKED',
+            ...(agent?.createdById ? { seller: { adminId: agent.createdById } } : {})
+        }
+    });
 
     const inDelivery = tasks.filter(t => t.order.status === 'OUT_FOR_DELIVERY').length;
-    const delivered = tasks.filter(t => t.order.status === 'DELIVERED').length;
-    const failed = tasks.filter(t => t.order.status === 'DELIVERY_FAILED').length;
+    const deliveredCount = tasks.filter(t => t.order.status === 'DELIVERED').length;
+    const failedCount = tasks.filter(t => t.order.status === 'DELIVERY_FAILED').length;
+
+    // Daily History Logic
+    const dailyStats = tasks.reduce((acc, task) => {
+        if (!task.completedAt) return acc;
+        const date = new Date(task.completedAt).toISOString().split('T')[0];
+        if (!acc[date]) {
+            acc[date] = { date, delivered: 0, failed: 0, total: 0, totalTime: 0 };
+        }
+        if (task.order.status === 'DELIVERED') acc[date].delivered++;
+        if (task.order.status === 'DELIVERY_FAILED') acc[date].failed++;
+        
+        if (task.startedAt && task.completedAt) {
+            const duration = (new Date(task.completedAt) - new Date(task.startedAt)) / (1000 * 60); // minutes
+            acc[date].totalTime += duration;
+        }
+        
+        acc[date].total++;
+        return acc;
+    }, {});
+
+    const dailyHistory = Object.values(dailyStats)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map(day => ({
+            ...day,
+            avgTime: day.total > 0 && day.totalTime > 0 ? Math.round(day.totalTime / day.total) : '--'
+        }));
+
+    const globalAvgTime = dailyHistory.length > 0 
+        ? Math.round(dailyHistory.reduce((s, h) => s + (typeof h.avgTime === 'number' ? h.avgTime : 0), 0) / dailyHistory.filter(h => typeof h.avgTime === 'number').length || 0)
+        : '--';
 
     return {
         readyForDelivery: readyCount,
         inDelivery,
-        delivered,
-        failed,
-        totalAssigned: tasks.length
+        delivered: deliveredCount,
+        failed: failedCount,
+        totalAssigned: tasks.length,
+        total: readyCount + inDelivery + deliveredCount + failedCount,
+        dailyHistory,
+        avgDuration: globalAvgTime
     };
 };
 

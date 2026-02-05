@@ -1,8 +1,94 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, Truck, Layout, BarChart, Settings, ShoppingCart, Search, Filter, Scan, Package, Eye, Clock, List, Box, X, MapPin, Phone, User, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Home, Truck, BarChart, Settings, ShoppingCart, Search, Filter, Scan, Package, Eye, Clock, List, Box, X, MapPin, Phone, User, CheckCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../lib/api';
+
+function CompleteDeliveryModal({ order, onClose, onSuccess }) {
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        receiverName: '',
+        notes: ''
+    });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            // Task ID lookup would be ideal, but updateOrderStatus uses orderId
+            await api.patch(`/orders/${order.id}/status`, { 
+                status: 'DELIVERED',
+                ...formData 
+            });
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Failed to complete delivery:', error);
+            alert('Failed to complete delivery. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <form onSubmit={handleSubmit} className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl animate-in fade-in zoom-in duration-200">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 text-green-600">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5" />
+                        <h2 className="text-xl font-bold">Mark as Delivered</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-4 text-left">
+                    <p className="text-sm text-gray-500 mb-2">Order <strong>#{order.orderNumber}</strong> ke liye delivery details bharein.</p>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Receiver's Name</label>
+                        <input
+                            type="text"
+                            required
+                            placeholder="Kisko deliver hua?"
+                            value={formData.receiverName}
+                            onChange={(e) => setFormData({ ...formData, receiverName: e.target.value })}
+                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Notes (Optional)</label>
+                        <textarea
+                            value={formData.notes}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 h-20 resize-none"
+                            placeholder="Koi vishesh jaankari..."
+                        />
+                    </div>
+                </div>
+
+                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-gray-700 font-bold hover:bg-gray-100 rounded-lg transition-all"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        type="submit"
+                        disabled={loading}
+                        className="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 shadow-md active:scale-95 transition-all"
+                    >
+                        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Confirm Delivery
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
 
 export function DeliveryDashboardPage() {
     const navigate = useNavigate();
@@ -21,30 +107,35 @@ export function DeliveryDashboardPage() {
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null); // For View Order Modal
     const [isStartDeliveryOpen, setIsStartDeliveryOpen] = useState(false); // For Start Delivery Modal
+    const [isCompleteDeliveryOpen, setIsCompleteDeliveryOpen] = useState(false); // For Complete Delivery Modal
 
     // Filter State
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     const [filterStatus, setFilterStatus] = useState('All Statuses');
     const [filterDate, setFilterDate] = useState('All Time');
     const [searchQuery, setSearchQuery] = useState('');
+    const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
         fetchData();
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
     }, []);
 
     const fetchData = async () => {
         try {
-            const token = localStorage.getItem('token');
+            setLoading(true);
             const [statsRes, ordersRes] = await Promise.all([
-                axios.get('http://localhost:5000/api/delivery/stats', { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get('http://localhost:5000/api/orders/delivery', { headers: { Authorization: `Bearer ${token}` } })
+                api.get('/delivery/stats'),
+                api.get('/delivery/orders')
             ]);
-
+            
+            // Map stats: total, pending(ready), in transit(processing), delivered(shipped)
             setStats({
-                total: statsRes.data.totalAssigned + statsRes.data.readyForDelivery,
-                pending: statsRes.data.readyForDelivery, // Ready to pick up
-                processing: statsRes.data.inDelivery,    // In transit
-                shipped: statsRes.data.delivered         // Completed
+                total: statsRes.data.total,
+                pending: statsRes.data.readyForDelivery,
+                processing: statsRes.data.inDelivery,
+                shipped: statsRes.data.delivered
             });
 
             setOrders(ordersRes.data);
@@ -71,11 +162,7 @@ export function DeliveryDashboardPage() {
     const confirmStartDelivery = async () => {
         if (!selectedOrder) return;
         try {
-            const token = localStorage.getItem('token');
-            await axios.patch(`http://localhost:5000/api/orders/${selectedOrder.id}/status`,
-                { status: 'OUT_FOR_DELIVERY' },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await api.patch(`/orders/${selectedOrder.id}/status`, { status: 'OUT_FOR_DELIVERY' });
 
             alert(`Delivery started for Order #${selectedOrder.orderNumber}!`);
             setIsStartDeliveryOpen(false);
@@ -85,6 +172,11 @@ export function DeliveryDashboardPage() {
             console.error("Error starting delivery:", error);
             alert("Failed to start delivery. " + (error.response?.data?.message || ""));
         }
+    };
+
+    const handleCompleteDelivery = (order) => {
+        setSelectedOrder(order);
+        setIsCompleteDeliveryOpen(true);
     };
 
     const handleFilter = () => {
@@ -115,6 +207,10 @@ export function DeliveryDashboardPage() {
                         <h1 className="text-2xl font-bold text-orange-500">Delivery Management</h1>
                         <p className="text-gray-500 text-sm">Manage and track your delivery assignments</p>
                     </div>
+                </div>
+                <div className="text-right hidden md:block">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">System Time</p>
+                    <p className="text-xl font-mono font-bold text-gray-900">{currentTime.toLocaleTimeString()}</p>
                 </div>
                 <div className="flex flex-wrap gap-3 w-full md:w-auto">
                     <button
@@ -313,9 +409,12 @@ export function DeliveryDashboardPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-medium">
-                                        <button onClick={() => handleViewOrder(order)} className="text-blue-600 hover:text-blue-800 mr-3 transition-colors">View</button>
+                                        <button onClick={() => handleViewOrder(order)} className="text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer mr-3">View</button>
                                         {order.status === 'PACKED' && (
-                                            <button onClick={() => handleStartDelivery(order)} className="text-green-600 hover:text-green-800 transition-colors">Start Delivery</button>
+                                            <button onClick={() => handleStartDelivery(order)} className="text-green-600 hover:text-green-800 font-bold transition-colors cursor-pointer">Start Delivery</button>
+                                        )}
+                                        {order.status === 'OUT_FOR_DELIVERY' && (
+                                            <button onClick={() => handleCompleteDelivery(order)} className="text-orange-600 hover:text-orange-800 font-bold transition-colors cursor-pointer">Complete Delivery</button>
                                         )}
                                     </td>
                                 </tr>
@@ -404,6 +503,20 @@ export function DeliveryDashboardPage() {
                                 </div>
                             </div>
 
+                            {selectedOrder.items && selectedOrder.items.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Items</p>
+                                    <div className="max-h-32 overflow-y-auto space-y-2 pr-2">
+                                        {selectedOrder.items.map((item, id) => (
+                                            <div key={id} className="flex justify-between text-sm bg-gray-50 p-2 rounded-lg">
+                                                <span className="text-gray-700">{item.productName || 'Product'} x{item.quantity}</span>
+                                                <span className="font-bold text-gray-900">{item.price}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <button onClick={() => setSelectedOrder(null)} className="w-full px-4 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200">Close</button>
                         </div>
                     </div>
@@ -430,6 +543,17 @@ export function DeliveryDashboardPage() {
                         </div>
                     </div>
                 </div>
+            )}
+            {/* Complete Delivery Modal */}
+            {isCompleteDeliveryOpen && selectedOrder && (
+                <CompleteDeliveryModal
+                    order={selectedOrder}
+                    onClose={() => {
+                        setIsCompleteDeliveryOpen(false);
+                        setSelectedOrder(null);
+                    }}
+                    onSuccess={fetchData}
+                />
             )}
 
         </div>

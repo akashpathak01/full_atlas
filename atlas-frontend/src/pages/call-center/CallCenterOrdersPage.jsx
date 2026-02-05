@@ -20,9 +20,8 @@ export function CallCenterOrdersPage() {
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                // According to our backend logic, CALL_CENTER_AGENT gets PENDING_REVIEW by default
-                // But we specify it for clarity
-                const response = await api.get('/orders?status=PENDING_REVIEW');
+                // Fetch all assigned orders for this agent
+                const response = await api.get('/call-center/orders');
                 setOrders(response.data);
             } catch (err) {
                 console.error('Failed to fetch call center orders:', err);
@@ -114,7 +113,7 @@ export function CallCenterOrdersPage() {
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Pending</p>
                         <h3 className="text-2xl font-bold text-gray-900">
-                            {orders.filter(o => o.status === 'PENDING_REVIEW' || o.status === 'PENDING').length}
+                            {orders.filter(o => ['PENDING_REVIEW', 'PENDING', 'IN_PROGRESS'].includes(o.status)).length}
                         </h3>
                     </div>
                 </div>
@@ -125,7 +124,7 @@ export function CallCenterOrdersPage() {
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Confirmed</p>
                         <h3 className="text-2xl font-bold text-gray-900">
-                            {orders.filter(o => o.status === 'CONFIRMED').length}
+                            {orders.filter(o => ['CONFIRMED', 'COMPLETED', 'DELIVERED', 'SHIPPED'].includes(o.status)).length}
                         </h3>
                     </div>
                 </div>
@@ -136,7 +135,7 @@ export function CallCenterOrdersPage() {
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Cancelled</p>
                         <h3 className="text-2xl font-bold text-gray-900">
-                            {orders.filter(o => o.status === 'CANCELLED').length}
+                            {orders.filter(o => ['CANCELLED', 'REJECTED', 'FAILED'].includes(o.status)).length}
                         </h3>
                     </div>
                 </div>

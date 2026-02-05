@@ -25,9 +25,10 @@ model User {
   idFrontImage     String?
   idBackImage      String?
   createdById      Int? // The Admin who created this staff account
-  packagingTasks   PackagingTask[]
-  deliveryTasks    DeliveryTask[]
-  callNotes        CallNote[]
+  packagingTasks     PackagingTask[]
+  deliveryTasks      DeliveryTask[]
+  packagingMaterials PackagingMaterial[]
+  callNotes          CallNote[]
   assignedOrders   Order[]         @relation("CallCenterAgent")
   adminProducts    Product[]       @relation("ProductAdmin")
   createdAt        DateTime        @default(now())
@@ -187,6 +188,8 @@ model DeliveryTask {
   completedAt  DateTime?
   receiverName String?
   notes        String?
+  weight       Float?
+  qualityCheck String?   // PASSED, CONDITIONAL, FAILED
 }
 
 model CallNote {
@@ -238,3 +241,15 @@ model SystemConfiguration {
   updatedAt DateTime @updatedAt
 }
 
+model PackagingMaterial {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String   // Boxes, Wraps, Labels, Tape, Other
+  stock     Int      @default(0)
+  minLevel  Int      @default(0)
+  cost      Float    @default(0)
+  adminId   Int?     // Scoping to Admin/Tenant
+  admin     User?    @relation(fields: [adminId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

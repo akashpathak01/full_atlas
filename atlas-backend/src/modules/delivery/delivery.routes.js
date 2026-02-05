@@ -6,6 +6,7 @@ const { verifyToken, authorizeRoles } = require('../../middleware/auth');
 router.post('/assign', verifyToken, authorizeRoles('ADMIN'), deliveryController.assignOrder);
 router.get('/stats', verifyToken, authorizeRoles('DELIVERY_AGENT', 'ADMIN'), deliveryController.getDeliveryStats);
 router.get('/tasks', verifyToken, authorizeRoles('ADMIN', 'DELIVERY_AGENT'), deliveryController.listTasks);
+router.get('/orders', verifyToken, authorizeRoles('DELIVERY_AGENT', 'ADMIN'), deliveryController.getDeliveryOrders);
 router.patch('/tasks/:id/start', verifyToken, authorizeRoles('DELIVERY_AGENT'), deliveryController.startDelivery);
 router.patch('/tasks/:id/complete', verifyToken, authorizeRoles('DELIVERY_AGENT'), deliveryController.completeDelivery);
 

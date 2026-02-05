@@ -28,7 +28,7 @@ const completeTask = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const task = await packagingService.completeTask(id, req.user.id, req.user);
+        const task = await packagingService.completeTask(id, req.user.id, req.user, req.body);
 
         res.json(task);
     } catch (error) {
@@ -48,9 +48,60 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
+const listMaterials = async (req, res) => {
+    try {
+        const materials = await packagingService.listMaterials(req.user);
+        res.json(materials);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching materials', error: error.message });
+    }
+};
+
+const createMaterial = async (req, res) => {
+    try {
+        const material = await packagingService.createMaterial(req.body, req.user);
+        res.status(201).json(material);
+    } catch (error) {
+        res.status(400).json({ message: 'Error creating material', error: error.message });
+    }
+};
+
+const updateMaterial = async (req, res) => {
+    try {
+        const material = await packagingService.updateMaterial(req.params.id, req.body, req.user);
+        res.json(material);
+    } catch (error) {
+        res.status(400).json({ message: 'Error updating material', error: error.message });
+    }
+};
+
+const deleteMaterial = async (req, res) => {
+    try {
+        await packagingService.deleteMaterial(req.params.id, req.user);
+        res.json({ message: 'Material deleted successfully' });
+    } catch (error) {
+        res.status(400).json({ message: 'Error deleting material', error: error.message });
+    }
+};
+
+const getReports = async (req, res) => {
+    try {
+        const { period } = req.query;
+        const reports = await packagingService.getReports(req.user, period);
+        res.json(reports);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching reports', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
     completeTask,
-    getDashboardStats
+    getDashboardStats,
+    listMaterials,
+    createMaterial,
+    updateMaterial,
+    deleteMaterial,
+    getReports
 };

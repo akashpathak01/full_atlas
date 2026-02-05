@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Filter, Plus, Download, AlertTriangle, Package, Trash2, Edit, Home, Box, LayoutGrid } from 'lucide-react';
+import { Search, Filter, Plus, Download, AlertTriangle, Package, Trash2, Edit, Home, Box, LayoutGrid, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 import { AddMaterialModal } from './AddMaterialModal';
 
 export function PackagingMaterials() {
@@ -8,6 +9,59 @@ export function PackagingMaterials() {
     const [showAddModal, setShowAddModal] = useState(false);
     // Empty state to match screenshot
     const [materials, setMaterials] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [filterType, setFilterType] = useState('All');
+    const [filterLevel, setFilterLevel] = useState('All Stock Levels');
+
+    const fetchMaterials = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/packaging/materials');
+            setMaterials(response.data);
+        } catch (error) {
+            console.error('Failed to fetch materials:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this material?')) return;
+        try {
+            await api.delete(`/packaging/materials/${id}`);
+            fetchMaterials();
+        } catch (error) {
+            console.error('Error deleting material:', error);
+            alert('Failed to delete material');
+        }
+    };
+
+    React.useEffect(() => {
+        fetchMaterials();
+    }, []);
+
+    const getStatus = (item) => {
+        if (item.stock <= 0) return 'Out of Stock';
+        if (item.stock <= item.minLevel) return 'Low Stock';
+        return 'In Stock';
+    };
+
+    const filteredMaterials = materials.filter(m => {
+        const matchesType = filterType === 'All' || m.type === filterType;
+        const status = getStatus(m);
+        const matchesLevel = filterLevel === 'All Stock Levels' || 
+                           (filterLevel === 'In Stock' && status === 'In Stock') ||
+                           (filterLevel === 'Low Stock' && status === 'Low Stock') ||
+                           (filterLevel === 'Out of Stock' && status === 'Out of Stock');
+        return matchesType && matchesLevel;
+    });
+
+    const stats = {
+        total: materials.length,
+        lowStock: materials.filter(m => getStatus(m) === 'Low Stock').length,
+        outOfStock: materials.filter(m => getStatus(m) === 'Out of Stock').length,
+        totalValue: materials.reduce((sum, m) => sum + (m.stock * m.cost), 0).toFixed(2)
+    };
 
     return (
         <div className="space-y-6">
@@ -54,16 +108,26 @@ export function PackagingMaterials() {
                         <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 border-b border-gray-100">
                             <div>
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Type</label>
-                                <select className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 leading-tight">
-                                    <option>Other</option>
-                                    <option>Boxes</option>
-                                    <option>Wraps</option>
-                                    <option>Labels</option>
+                                <select 
+                                    value={filterType}
+                                    onChange={(e) => setFilterType(e.target.value)}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 leading-tight"
+                                >
+                                    <option value="All">All Types</option>
+                                    <option value="Boxes">Boxes</option>
+                                    <option value="Wraps">Wraps</option>
+                                    <option value="Labels">Labels</option>
+                                    <option value="Tape">Tape</option>
+                                    <option value="Other">Other</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Stock Level</label>
-                                <select className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 leading-tight">
+                                <select 
+                                    value={filterLevel}
+                                    onChange={(e) => setFilterLevel(e.target.value)}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 leading-tight"
+                                >
                                     <option>All Stock Levels</option>
                                     <option>In Stock</option>
                                     <option>Low Stock</option>
@@ -92,28 +156,44 @@ export function PackagingMaterials() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {materials.length > 0 ? (
-                                        materials.map((item) => (
-                                            <tr key={item.id} className="hover:bg-gray-50 border-b border-gray-50">
-                                                <td className="px-6 py-4 font-bold text-gray-900">{item.name}</td>
-                                                <td className="px-6 py-4 text-gray-500 font-medium">{item.type}</td>
-                                                <td className="px-6 py-4 font-bold">{item.stock}</td>
-                                                <td className="px-6 py-4 text-gray-500">{item.minLevel}</td>
-                                                <td className="px-6 py-4 text-gray-500 font-medium">{item.cost}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                                ${item.status === 'Low Stock' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                                                        {item.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex gap-2">
-                                                        <button className="p-2 bg-gray-50 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
-                                                        <button className="p-2 bg-gray-50 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan="7" className="px-6 py-24 text-center">
+                                                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+                                                <p className="text-gray-500 font-bold">Loading materials...</p>
+                                            </td>
+                                        </tr>
+                                    ) : filteredMaterials.length > 0 ? (
+                                        filteredMaterials.map((item) => {
+                                            const status = getStatus(item);
+                                            return (
+                                                <tr key={item.id} className="hover:bg-gray-50 border-b border-gray-50">
+                                                    <td className="px-6 py-4 font-bold text-gray-900">{item.name}</td>
+                                                    <td className="px-6 py-4 text-gray-500 font-medium">{item.type}</td>
+                                                    <td className="px-6 py-4 font-bold">{item.stock}</td>
+                                                    <td className="px-6 py-4 text-gray-500">{item.minLevel}</td>
+                                                    <td className="px-6 py-4 text-gray-500 font-medium">${item.cost.toFixed(2)}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                                    ${status === 'Low Stock' ? 'bg-yellow-100 text-yellow-800' : 
+                                                      status === 'Out of Stock' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                                                            {status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex gap-2">
+                                                            <button className="p-2 bg-gray-50 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"><Edit className="w-4 h-4" /></button>
+                                                            <button 
+                                                                onClick={() => handleDelete(item.id)}
+                                                                className="p-2 bg-gray-50 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     ) : (
                                         <tr>
                                             <td colSpan="7" className="px-6 py-24 text-center">
@@ -147,19 +227,19 @@ export function PackagingMaterials() {
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-3">
                                 <span className="text-gray-500 font-medium">Total Materials</span>
-                                <span className="font-bold text-gray-900">{materials.length}</span>
+                                <span className="font-bold text-gray-900">{stats.total}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-3">
                                 <span className="text-gray-500 font-medium">Low Stock</span>
-                                <span className="font-bold text-red-500">0</span>
+                                <span className="font-bold text-yellow-600">{stats.lowStock}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-3">
                                 <span className="text-gray-500 font-medium">Out of Stock</span>
-                                <span className="font-bold text-gray-900">0</span>
+                                <span className="font-bold text-red-600">{stats.outOfStock}</span>
                             </div>
                             <div className="pt-2 flex justify-between items-center text-sm">
                                 <span className="text-gray-500 font-medium">Total Value</span>
-                                <span className="font-black text-green-600 text-lg">$</span>
+                                <span className="font-black text-green-600 text-lg">${stats.totalValue}</span>
                             </div>
                         </div>
                     </div>
@@ -193,7 +273,7 @@ export function PackagingMaterials() {
                 </div>
             </div>
 
-            {showAddModal && <AddMaterialModal onClose={() => setShowAddModal(false)} />}
+            {showAddModal && <AddMaterialModal onClose={() => setShowAddModal(false)} onSuccess={fetchMaterials} />}
         </div>
     );
 }

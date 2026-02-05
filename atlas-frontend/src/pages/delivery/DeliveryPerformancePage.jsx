@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, CheckCircle, Zap, FileText, Box, Clock, Shield, AlertTriangle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../lib/api';
 
 export function DeliveryPerformancePage() {
     const navigate = useNavigate();
@@ -14,14 +14,17 @@ export function DeliveryPerformancePage() {
         failed: 0
     });
     const [loading, setLoading] = useState(true);
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const res = await axios.get('http://localhost:5000/api/delivery/stats', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await api.get('/delivery/stats');
                 setStats(res.data);
                 setLoading(false);
             } catch (error) {
@@ -48,7 +51,7 @@ export function DeliveryPerformancePage() {
                 </div>
                 <div className="text-right mt-2 md:mt-0">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Current Time</p>
-                    <p className="text-xl font-black text-gray-900 leading-none">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-xl font-black text-gray-900 leading-none">{currentTime.toLocaleTimeString()}</p>
                 </div>
             </div>
 
@@ -146,7 +149,7 @@ export function DeliveryPerformancePage() {
                             <Clock className="w-6 h-6 text-blue-500" />
                         </div>
                         <div>
-                            <h4 className="text-xl font-black text-gray-900">--</h4>
+                            <h4 className="text-xl font-black text-gray-900">{stats.avgDuration} {stats.avgDuration !== '--' ? 'min' : ''}</h4>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Avg Duration</p>
                         </div>
                     </div>
@@ -155,7 +158,7 @@ export function DeliveryPerformancePage() {
                             <Shield className="w-6 h-6 text-yellow-500" />
                         </div>
                         <div>
-                            <h4 className="text-xl font-black text-gray-900">{totalCompleted}</h4>
+                            <h4 className="text-xl font-black text-gray-900">{stats.delivered + stats.failed}</h4>
                             <span className="text-sm font-bold text-gray-500">Total Checks</span>
                         </div>
                     </div>
@@ -199,11 +202,25 @@ export function DeliveryPerformancePage() {
                                 <th className="px-6 py-4 text-[10px] font-black text-yellow-600 uppercase tracking-widest">AVG TIME</th>
                             </tr>
                         </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {stats.dailyHistory && stats.dailyHistory.length > 0 ? (
+                                stats.dailyHistory.map((day, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 text-sm font-bold text-gray-700">{day.date}</td>
+                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">{day.delivered}</td>
+                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">{day.total}</td>
+                                        <td className="px-6 py-4 text-sm font-bold text-blue-600">{day.avgTime} {day.avgTime !== '--' ? 'min' : ''}</td>
+                                    </tr>
+                                ))
+                            ) : null}
+                        </tbody>
                     </table>
                 </div>
-                <div className="flex justify-center items-center py-10 bg-gray-50/30 rounded-b-xl border border-gray-50 border-t-0">
-                    <p className="text-xs font-bold text-gray-300 italic uppercase tracking-widest leading-loose">No activity data available</p>
-                </div>
+                {(!stats.dailyHistory || stats.dailyHistory.length === 0) && (
+                    <div className="flex justify-center items-center py-10 bg-gray-50/30 rounded-b-xl border border-gray-50 border-t-0">
+                        <p className="text-xs font-bold text-gray-300 italic uppercase tracking-widest leading-loose">No activity data available</p>
+                    </div>
+                )}
             </div>
         </div>
     );

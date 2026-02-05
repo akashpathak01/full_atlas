@@ -1,15 +1,15 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-async function check() {
+async function main() {
     const roles = await prisma.role.findMany();
-    console.log('Roles in DB:', JSON.stringify(roles, null, 2));
-
+    console.log('Roles:', JSON.stringify(roles, null, 2));
+    
     const users = await prisma.user.findMany({
-        where: { email: 'admin@atlas.com' },
-        include: { role: true }
+        take: 10,
+        select: { id: true, name: true, role: { select: { name: true } } }
     });
-    console.log('Admin User in DB:', JSON.stringify(users, null, 2));
+    console.log('Users:', JSON.stringify(users, null, 2));
 }
 
-check().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
+main().catch(console.error).finally(() => prisma.$disconnect());

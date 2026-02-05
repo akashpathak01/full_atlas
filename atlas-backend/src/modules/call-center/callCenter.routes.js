@@ -14,6 +14,7 @@ router.patch('/orders/:id/status', verifyToken, authorizeRoles('ADMIN', 'SUPER_A
 // Notes Routes
 router.post('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT'), callCenterController.addNote);
 router.get('/orders/:id/notes', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'), callCenterController.getNotes);
+router.get('/agent-stats', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_AGENT'), callCenterController.getAgentStats);
 
 // Manager Routes
 router.get('/manager-dashboard', verifyToken, authorizeRoles('ADMIN', 'SUPER_ADMIN', 'CALL_CENTER_MANAGER'), callCenterController.getDashboardStats);

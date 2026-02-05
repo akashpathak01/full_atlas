@@ -3,14 +3,23 @@ const { logAction } = require('../../utils/auditLogger');
 const bcrypt = require('bcryptjs');
 
 const getCustomers = async () => {
-    // Assuming customers are users with specific role or distinct customers on orders
-    // Based on schema, Order has 'customer' relation (Customer model? or just fields?)
-    // Schema line 135: customer Customer? @relation...
-    // Let's fetch from Customer model if it exists, otherwise Order fields.
-    // I recall simplified schema sometimes. Let's assume Customer model based on routes.
-    return await prisma.customer.findMany({
-        orderBy: { createdAt: 'desc' }
+    const customers = await prisma.customer.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: {
+            _count: {
+                select: { orders: true }
+            }
+        }
     });
+
+    return customers.map(customer => ({
+        id: `CUST-${customer.id.toString().padStart(3, '0')}`,
+        dbId: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email || 'N/A',
+        totalOrders: customer._count.orders
+    }));
 };
 
 const getCustomerById = async (id) => {
@@ -20,8 +29,21 @@ const getCustomerById = async (id) => {
     });
 };
 
-const getOrders = async () => {
+const getOrders = async (filters = {}, user = {}) => {
+    const where = {};
+    
+    // If user is an agent, restrict to their assigned orders
+    const userRole = user.role?.name || user.role;
+    if (userRole === 'CALL_CENTER_AGENT') {
+        where.callCenterAgentId = user.id;
+    }
+
+    if (filters.status) {
+        where.status = filters.status;
+    }
+
     return await prisma.order.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         include: {
             customer: true,
@@ -570,6 +592,102 @@ const getOrderStatistics = async () => {
     };
 };
 
+const getAgentStats = async (agentId) => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    // 1. Assigned Orders (Total Assigned Pending/Active)
+    const assignedCount = await prisma.order.count({
+        where: {
+            callCenterAgentId: parseInt(agentId),
+            status: { in: ['PENDING_REVIEW', 'IN_PROGRESS', 'PENDING'] }
+        }
+    });
+
+    // 2. Confirmed Orders (Completed Today)
+    const confirmedCount = await prisma.order.count({
+        where: {
+            callCenterAgentId: parseInt(agentId),
+            status: { in: ['CONFIRMED', 'COMPLETED', 'DELIVERED', 'SHIPPED'] },
+            updatedAt: { gte: startOfDay }
+        }
+    });
+
+    // 3. Postponed Orders (For now using IN_PROGRESS as placeholder or ON_HOLD if exists)
+    // Actually, let's make Postponed 0 for now as we don't have that status,
+    // or maybe 'ON_HOLD' if we add it. 
+    // To match user expectation, let's count IN_PROGRESS as 'Postponed/Processing' if distinct from Pending.
+    // If PENDING_REVIEW is 'Assigned', maybe IN_PROGRESS is 'Postponed'? 
+    // Let's count 'ON_HOLD' explicitly, or just 0.
+    const postponedCount = await prisma.order.count({
+        where: {
+            callCenterAgentId: parseInt(agentId),
+            status: 'ON_HOLD' 
+        }
+    });
+
+    // 4. Cancelled Orders
+    const cancelledCount = await prisma.order.count({
+        where: {
+            callCenterAgentId: parseInt(agentId),
+            status: { in: ['CANCELLED', 'REJECTED', 'FAILED'] },
+            updatedAt: { gte: startOfDay }
+        }
+    });
+
+    // 5. Total Calls Today
+    const callsCount = await prisma.callNote.count({
+        where: {
+            agentId: parseInt(agentId),
+            createdAt: { gte: startOfDay }
+        }
+    });
+
+    // 6. Priority Orders (Just listing PENDING_REVIEW assigned to agent)
+    const priorityOrders = await prisma.order.findMany({
+        where: {
+            callCenterAgentId: parseInt(agentId),
+            status: 'PENDING_REVIEW'
+        },
+        take: 5,
+        orderBy: { createdAt: 'asc' }, // Oldest first as priority
+        include: { customer: true }
+    });
+
+    // 7. Recent Activity (Recent Call Notes)
+    const recentActivity = await prisma.callNote.findMany({
+        where: { agentId: parseInt(agentId) },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { order: { select: { orderNumber: true, customerName: true } } } // Assuming order relation exists
+    });
+
+    return {
+        stats: {
+            assignedOrders: assignedCount,
+            confirmedOrders: confirmedCount,
+            postponedOrders: postponedCount,
+            cancelledOrders: cancelledCount,
+            totalCalls: callsCount
+        },
+        priorityOrders: priorityOrders.map(o => ({
+            id: o.orderNumber, // Using orderNumber for display
+            dbId: o.id,
+            customer: o.customerName || o.customer?.name || 'Unknown',
+            product: 'General Items', // Placeholder as items might be complex
+            units: o.totalAmount ? `${o.totalAmount}` : 'N/A', // Using amount as proxy or count items if fetched
+            date: o.createdAt.toLocaleDateString() + ' ' + o.createdAt.toLocaleTimeString()
+        })),
+        recentActivity: recentActivity.map(n => ({
+            id: n.id,
+            type: 'Call',
+            description: `Called ${n.order?.customerName || n.order?.orderNumber || 'Customer'}`,
+            time: n.createdAt.toLocaleTimeString(),
+            note: n.content
+        }))
+    };
+};
+
 const createAgent = async (agentData) => {
     const { email, password, name, phone, status } = agentData;
 
@@ -619,5 +737,6 @@ module.exports = {
     updateAgent,
     getPerformanceReports,
     getOrderStatistics,
-    createAgent
+    createAgent,
+    getAgentStats
 };
