@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
-import { sellerInventoryData } from '../../data/sellerDummyData';
-import { Warehouse, Plus, Upload, Home, Search, AlertTriangle, XCircle, Package, Edit, Trash2, Eye, X, Save, Download, LayoutDashboard, DollarSign, BarChart3, TrendingUp, ArrowLeft, PlusCircle, Info, Globe, ChevronDown, Image as ImageIcon, Link, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
+import { Warehouse, Plus, Upload, Upload as DownloadIcon, Home, Search, AlertTriangle, XCircle, Package, Edit, Trash2, Eye, X, Save, Download, LayoutDashboard, DollarSign, BarChart3, TrendingUp, ArrowLeft, PlusCircle, Info, Globe, ChevronDown, Image as ImageIcon, Link, FileText } from 'lucide-react';
 
 export function SellerInventoryPage() {
     const [view, setView] = useState('list'); // 'list' or 'add'
-    const [inventory, setInventory] = useState(sellerInventoryData);
+    const [inventory, setInventory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        totalItems: 0,
+        lowStock: 0,
+        outOfStock: 0,
+        warehouses: 0
+    });
+
     const [showExportModal, setShowExportModal] = useState(false);
     const [showDashboardModal, setShowDashboardModal] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -12,11 +20,30 @@ export function SellerInventoryPage() {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const res = await api.get('/inventory/seller');
+                if (res.data) {
+                    setInventory(res.data.inventory || []);
+                    setStats(res.data.stats || { totalItems: 0, lowStock: 0, outOfStock: 0, warehouses: 0 });
+                }
+            } catch (err) {
+                console.error("Failed to fetch seller inventory:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
     const handleView = (item) => {
         setSelectedItem(item);
         setShowViewModal(true);
     };
 
+    // Edit and Delete are placeholders/hidden for now as per requirements scope unless strictly required.
+    // Keeping logic but it operates on local state until integrated.
     const handleEdit = (item) => {
         setSelectedItem(item);
         setShowEditModal(true);
@@ -28,7 +55,7 @@ export function SellerInventoryPage() {
     };
 
     const confirmDelete = () => {
-        setInventory(inventory.filter(i => i.sku !== selectedItem.sku));
+        setInventory(inventory.filter(i => i.id !== selectedItem.id)); // Use ID instead of SKU
         setShowDeleteModal(false);
         alert('Product deleted successfully!');
     };
@@ -41,24 +68,26 @@ export function SellerInventoryPage() {
     // Derived state for filtered inventory
     const filteredInventory = inventory.filter(item => {
         const matchesSearch =
-            item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.sku.toLowerCase().includes(searchQuery.toLowerCase());
+            (item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (item.sku && item.sku.toLowerCase().includes(searchQuery.toLowerCase()));
 
-        const matchesWarehouse = warehouseFilter === 'All Warehouses' || item.warehouse === warehouseFilter;
+        const matchesWarehouse = warehouseFilter === 'All Warehouses' || (item.warehouse && item.warehouse.includes(warehouseFilter));
 
         const matchesStock = stockLevelFilter === 'All Levels' ||
-            (stockLevelFilter === 'Low Stock' && item.stock < 20) || // Example logic
-            (stockLevelFilter === 'In Stock' && item.stock >= 20) ||
+            (stockLevelFilter === 'Low Stock' && item.stock <= 10) ||
+            (stockLevelFilter === 'In Stock' && item.stock > 10) ||
             (stockLevelFilter === 'Out of Stock' && item.stock === 0) ||
-            (item.stockStatus === stockLevelFilter); // Allow matching by explicit status string if present
+            (item.stockStatus === stockLevelFilter);
 
         return matchesSearch && matchesWarehouse && matchesStock;
     });
 
     // Unique warehouses for dropdown
-    const uniqueWarehouses = [...new Set(sellerInventoryData.map(item => item.warehouse))];
+    // Extract individual warehouses if comma separated, though usually singular for filtering simplicity
+    const uniqueWarehouses = [...new Set(inventory.flatMap(item => item.warehouse ? item.warehouse.split(', ') : []))];
 
     if (view === 'add') {
+        // ... (Add form logic - unchanged for now as scope is Data Binding)
         return (
             <div className="space-y-6 pb-20 animate-in fade-in duration-500">
                 {/* Header Actions */}
@@ -284,8 +313,10 @@ export function SellerInventoryPage() {
                     </div>
                 </div>
             </div>
-        );
+        )
     }
+    // ... wait, I cannot use comments to skip code in replace_file_content.
+    // I need to use multi_replace_file_content if I want to skip the middle block.
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700">
@@ -403,7 +434,7 @@ export function SellerInventoryPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Total Items</p>
-                        <h3 className="text-2xl font-bold text-gray-900">31</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.totalItems}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -430,7 +461,7 @@ export function SellerInventoryPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Warehouses</p>
-                        <h3 className="text-2xl font-bold text-gray-900">1</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.warehouses}</h3>
                     </div>
                 </div>
             </div>

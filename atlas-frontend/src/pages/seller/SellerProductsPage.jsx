@@ -1,16 +1,32 @@
-import React, { useState } from 'react';
-import { sellerProductsData } from '../../data/sellerDummyData';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
 import { Package, Plus, Upload, Home, Search, Eye, Edit, Trash2, X, Save, Download, LayoutDashboard, DollarSign, BarChart3, TrendingUp, Image as ImageIcon, Box, ArrowLeft, PlusCircle, Info, Globe, ChevronDown, Link, FileText } from 'lucide-react';
 
 export function SellerProductsPage() {
     const [view, setView] = useState('list'); // 'list' or 'add'
-    const [products, setProducts] = useState(sellerProductsData);
+    const [products, setProducts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [showExportModal, setShowExportModal] = useState(false);
     const [showDashboardModal, setShowDashboardModal] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                setIsLoading(true);
+                const response = await api.get('/products');
+                setProducts(response.data);
+            } catch (error) {
+                console.error('Failed to fetch seller products:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchProducts();
+    }, []);
 
     const handleView = (product) => {
         setSelectedProduct(product);

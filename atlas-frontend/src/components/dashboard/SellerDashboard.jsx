@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api'; // Ensure this exists or use axios directly
 import {
     Settings,
     ShoppingBag,
@@ -22,6 +23,27 @@ export function SellerDashboard() {
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const navigate = useNavigate();
 
+    const [stats, setStats] = useState({
+        totalSales: 0,
+        totalOrders: 0,
+        productsCount: 0,
+        pendingOrders: 0,
+        recentOrders: [],
+        lowStockProducts: []
+    });
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const res = await api.get('/stats/seller');
+                setStats(res.data);
+            } catch (err) {
+                console.error("Error fetching seller stats:", err);
+            }
+        };
+        fetchStats();
+    }, []);
+
     return (
         <div className="min-h-screen bg-white font-sans">
             {/* Top Alert Banner */}
@@ -43,7 +65,7 @@ export function SellerDashboard() {
             )}
 
             <div className="p-6 max-w-[1600px] mx-auto space-y-8">
-                {/* Breadcrumbs */}
+                {/* Breadcrumbs & Header - Kept existing... */}
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Home className="w-4 h-4" />
                     <span className="font-medium">Home</span>
@@ -77,32 +99,32 @@ export function SellerDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard
                         title="Total Sales"
-                        value="AED 0"
-                        trend="+14.5% from last month"
+                        value={`AED ${stats.totalSales.toLocaleString()}`}
+                        trend="Lifetime Revenue"
                         icon={<ShoppingBag className="w-6 h-6 text-orange-600" />}
                         color="bg-orange-50"
-                        textColor="text-green-600"
+                        textColor="text-orange-600"
                     />
                     <StatCard
                         title="Total Orders"
-                        value="0"
-                        trend="+2.3% from last month"
+                        value={stats.totalOrders}
+                        trend="Processed orders"
                         icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
                         color="bg-blue-50"
-                        textColor="text-green-600"
+                        textColor="text-blue-600"
                     />
                     <StatCard
                         title="Products"
-                        value="0"
-                        trend="+1.2% from last week"
+                        value={stats.productsCount}
+                        trend="Active Catalog"
                         icon={<Package className="w-6 h-6 text-green-600" />}
                         color="bg-green-50"
                         textColor="text-green-600"
                     />
                     <StatCard
                         title="Pending Orders"
-                        value="0"
-                        trend="0 orders waiting"
+                        value={stats.pendingOrders}
+                        trend="Needs Attention"
                         icon={<Clock className="w-6 h-6 text-yellow-600" />}
                         color="bg-yellow-50"
                         textColor="text-yellow-600"
@@ -236,14 +258,33 @@ export function SellerDashboard() {
                                 <h3 className="text-lg font-bold text-gray-800">Recent Orders</h3>
                                 <p className="text-sm text-gray-500 mt-1">Latest order activity</p>
                             </div>
-                            <button className="text-orange-500 text-sm font-medium hover:text-orange-600 transition-colors">
+                            <button onClick={() => navigate('/seller/orders')} className="text-orange-500 text-sm font-medium hover:text-orange-600 transition-colors">
                                 View all →
                             </button>
                         </div>
-                        <div className="py-12 flex flex-col items-center justify-center text-center">
-                            <ShoppingCart className="w-12 h-12 text-gray-200 mb-3" />
-                            <h4 className="text-gray-900 font-bold">No orders yet</h4>
-                            <p className="text-gray-400 text-sm">Your recent orders will appear here</p>
+                        <div className="max-h-[300px] overflow-y-auto pr-2">
+                            {stats.recentOrders && stats.recentOrders.length > 0 ? (
+                                stats.recentOrders.map(order => (
+                                    <OrderRow
+                                        key={order.id}
+                                        id={order.orderNumber}
+                                        date={new Date(order.createdAt).toLocaleDateString()}
+                                        amount={`AED ${order.totalAmount}`}
+                                        status={order.status}
+                                        statusColor={
+                                            order.status === 'DELIVERED' ? 'text-green-600' :
+                                                order.status === 'CANCELLED' ? 'text-red-600' :
+                                                    'text-orange-600'
+                                        }
+                                    />
+                                ))
+                            ) : (
+                                <div className="py-12 flex flex-col items-center justify-center text-center">
+                                    <ShoppingCart className="w-12 h-12 text-gray-200 mb-3" />
+                                    <h4 className="text-gray-900 font-bold">No orders yet</h4>
+                                    <p className="text-gray-400 text-sm">Your recent orders will appear here</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -254,16 +295,35 @@ export function SellerDashboard() {
                                 <h3 className="text-lg font-bold text-gray-800">Low Stock Alert</h3>
                                 <p className="text-sm text-gray-500 mt-1">Products running low on stock</p>
                             </div>
-                            <button className="text-orange-500 text-sm font-medium hover:text-orange-600 transition-colors">
+                            <button onClick={() => navigate('/seller/inventory')} className="text-orange-500 text-sm font-medium hover:text-orange-600 transition-colors">
                                 Manage →
                             </button>
                         </div>
-                        <div className="flex-1 flex flex-col items-center justify-center py-12">
-                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                                <CheckCircle2 className="w-8 h-8 text-green-500" />
-                            </div>
-                            <h4 className="text-lg font-bold text-gray-800">All good!</h4>
-                            <p className="text-gray-500 text-sm mt-1">No low stock products</p>
+                        <div className="flex-1 flex flex-col">
+                            {stats.lowStockProducts && stats.lowStockProducts.length > 0 ? (
+                                <div className="space-y-4">
+                                    {stats.lowStockProducts.map(prod => (
+                                        <div key={prod.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg border border-red-100">
+                                            <div>
+                                                <p className="font-bold text-gray-800 text-sm">{prod.name}</p>
+                                                <p className="text-xs text-red-500 font-medium">Critical Level</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-red-600 text-lg">{prod.stock}</p>
+                                                <p className="text-[10px] text-gray-500">Units left</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center py-12">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                                        <CheckCircle2 className="w-8 h-8 text-green-500" />
+                                    </div>
+                                    <h4 className="text-lg font-bold text-gray-800">All good!</h4>
+                                    <p className="text-gray-500 text-sm mt-1">No low stock products</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -18,7 +18,19 @@ const getPermissions = async (req, res) => {
     }
 };
 
+const updatePermissions = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { permissionIds } = req.body;
+        const result = await rolesService.updatePermissions(id, permissionIds);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating permissions', error: error.message });
+    }
+};
+
 module.exports = {
     listRoles,
-    getPermissions
+    getPermissions,
+    updatePermissions
 };

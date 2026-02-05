@@ -1,8 +1,80 @@
-import React, { useState } from 'react';
-import { Home, ChevronRight, Plus, Search, X, Globe, Filter, ArrowLeft, CheckCircle2, Upload, Send, Info, ChevronDown, ListPlus, FileText, LayoutList } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
+import { Home, ChevronRight, Plus, Search, X, Globe, Filter, ArrowLeft, CheckCircle2, Upload, Send, Info, ChevronDown, ListPlus, FileText, LayoutList, Loader2 } from 'lucide-react';
 
 export function SellerSourcingPage() {
     const [view, setView] = useState('list'); // 'list' or 'create'
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+
+    // Form State
+    const [formData, setFormData] = useState({
+        productName: '',
+        productUrl: '',
+        quantity: '',
+        numberOfCartons: '',
+        sourceCountry: 'Select source country',
+        destinationCountry: 'Select destination country',
+        fundingSource: "Seller's Funds",
+        priority: 'Medium',
+        budget: '',
+        additionalNotes: ''
+    });
+
+    useEffect(() => {
+        if (view === 'list') {
+            fetchRequests();
+        }
+    }, [view]);
+
+    const fetchRequests = async () => {
+        try {
+            setLoading(true);
+            const res = await api.get('/sourcing/seller');
+            setRequests(res.data);
+        } catch (error) {
+            console.error("Error fetching requests:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async () => {
+        if (!formData.productName || !formData.quantity || !formData.numberOfCartons || formData.sourceCountry === 'Select source country' || formData.destinationCountry === 'Select destination country') {
+            alert('Please fill in all required fields marked with *');
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            await api.post('/sourcing/seller', formData);
+            alert('Sourcing Request Submitted Successfully!');
+            setFormData({
+                productName: '',
+                productUrl: '',
+                quantity: '',
+                numberOfCartons: '',
+                sourceCountry: 'Select source country',
+                destinationCountry: 'Select destination country',
+                fundingSource: "Seller's Funds",
+                priority: 'Medium',
+                budget: '',
+                additionalNotes: ''
+            });
+            setView('list');
+        } catch (error) {
+            console.error("Error creating request:", error);
+            alert('Failed to submit request: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     if (view === 'create') {
         return (
@@ -45,11 +117,13 @@ export function SellerSourcingPage() {
 
                         <div className="p-8 space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Product Name */}
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Product Name <span className="text-red-500">*</span></label>
                                     <input
                                         type="text"
+                                        name="productName"
+                                        value={formData.productName}
+                                        onChange={handleInputChange}
                                         placeholder="Enter product name"
                                         className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium"
                                     />
@@ -58,11 +132,13 @@ export function SellerSourcingPage() {
                                     </div>
                                 </div>
 
-                                {/* Product URL */}
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Product URL (Optional)</label>
                                     <input
                                         type="text"
+                                        name="productUrl"
+                                        value={formData.productUrl}
+                                        onChange={handleInputChange}
                                         placeholder="https://example.com/product"
                                         className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium"
                                     />
@@ -88,11 +164,13 @@ export function SellerSourcingPage() {
                                     </div>
                                 </div>
 
-                                {/* Quantity */}
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Quantity (Pieces) <span className="text-red-500">*</span></label>
                                     <input
                                         type="number"
+                                        name="quantity"
+                                        value={formData.quantity}
+                                        onChange={handleInputChange}
                                         placeholder="Enter quantity in pieces"
                                         className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-bold text-gray-900"
                                     />
@@ -101,11 +179,13 @@ export function SellerSourcingPage() {
                                     </div>
                                 </div>
 
-                                {/* Number of Cartons */}
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Number of Cartons <span className="text-red-500">*</span></label>
                                     <input
                                         type="number"
+                                        name="numberOfCartons"
+                                        value={formData.numberOfCartons}
+                                        onChange={handleInputChange}
                                         placeholder="Enter number of cartons"
                                         className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-bold text-gray-900"
                                     />
@@ -118,7 +198,12 @@ export function SellerSourcingPage() {
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Source Country <span className="text-red-500">*</span></label>
                                     <div className="relative group">
-                                        <select className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium appearance-none cursor-pointer">
+                                        <select
+                                            name="sourceCountry"
+                                            value={formData.sourceCountry}
+                                            onChange={handleInputChange}
+                                            className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
+                                        >
                                             <option>Select source country</option>
                                             <option>China</option>
                                             <option>UAE</option>
@@ -136,7 +221,12 @@ export function SellerSourcingPage() {
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Destination Country <span className="text-red-500">*</span></label>
                                     <div className="relative group">
-                                        <select className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium appearance-none cursor-pointer">
+                                        <select
+                                            name="destinationCountry"
+                                            value={formData.destinationCountry}
+                                            onChange={handleInputChange}
+                                            className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
+                                        >
                                             <option>Select destination country</option>
                                             <option>United Arab Emirates</option>
                                             <option>Saudi Arabia</option>
@@ -155,13 +245,27 @@ export function SellerSourcingPage() {
                                     <div className="space-y-3">
                                         <label className="flex items-start gap-3 cursor-pointer group">
                                             <div className="mt-1">
-                                                <input type="radio" name="funding" defaultChecked className="w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300" />
+                                                <input
+                                                    type="radio"
+                                                    name="fundingSource"
+                                                    value="Seller's Funds"
+                                                    checked={formData.fundingSource === "Seller's Funds"}
+                                                    onChange={handleInputChange}
+                                                    className="w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"
+                                                />
                                             </div>
                                             <p className="text-sm font-bold text-gray-700 group-hover:text-yellow-600 transition-colors">Seller's Funds - I will finance this sourcing request</p>
                                         </label>
                                         <label className="flex items-start gap-3 cursor-pointer group">
                                             <div className="mt-1">
-                                                <input type="radio" name="funding" className="w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300" />
+                                                <input
+                                                    type="radio"
+                                                    name="fundingSource"
+                                                    value="CRM Funding"
+                                                    checked={formData.fundingSource === "CRM Funding"}
+                                                    onChange={handleInputChange}
+                                                    className="w-4 h-4 text-yellow-600 focus:ring-yellow-500 border-gray-300"
+                                                />
                                             </div>
                                             <p className="text-sm font-bold text-gray-700 group-hover:text-yellow-600 transition-colors">CRM Funding Request - Request CRM to finance this sourcing</p>
                                         </label>
@@ -189,7 +293,12 @@ export function SellerSourcingPage() {
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Priority</label>
                                     <div className="relative group">
-                                        <select className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium appearance-none cursor-pointer">
+                                        <select
+                                            name="priority"
+                                            value={formData.priority}
+                                            onChange={handleInputChange}
+                                            className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
+                                        >
                                             <option>Medium</option>
                                             <option>High</option>
                                             <option>Low</option>
@@ -203,6 +312,9 @@ export function SellerSourcingPage() {
                                     <label className="block text-sm font-bold text-gray-700">Budget (AED)</label>
                                     <input
                                         type="text"
+                                        name="budget"
+                                        value={formData.budget}
+                                        onChange={handleInputChange}
                                         placeholder="0.00"
                                         className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-bold text-gray-900"
                                     />
@@ -212,6 +324,9 @@ export function SellerSourcingPage() {
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="block text-sm font-bold text-gray-700">Additional Notes</label>
                                     <textarea
+                                        name="additionalNotes"
+                                        value={formData.additionalNotes}
+                                        onChange={handleInputChange}
                                         rows="4"
                                         placeholder="Any additional information or special requirements"
                                         className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-yellow-500/10 focus:border-yellow-600 focus:bg-white transition-all font-medium resize-none"
@@ -229,11 +344,12 @@ export function SellerSourcingPage() {
                                 Cancel
                             </button>
                             <button
-                                onClick={() => { alert('Sourcing Request Submitted!'); setView('list'); }}
-                                className="px-10 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-black transition-all active:scale-95 shadow-lg shadow-yellow-200 flex items-center"
+                                onClick={handleSubmit}
+                                disabled={submitting}
+                                className="px-10 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-black transition-all active:scale-95 shadow-lg shadow-yellow-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <Send className="w-4 h-4 mr-2" />
-                                Submit Request
+                                {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                                {submitting ? 'Submitting...' : 'Submit Request'}
                             </button>
                         </div>
                     </div>
@@ -361,27 +477,69 @@ export function SellerSourcingPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {/* Empty State */}
-                            <tr>
-                                <td colSpan="7" className="py-24 text-center">
-                                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                                        <div className="bg-yellow-50 p-6 rounded-3xl mb-6 shadow-inner">
-                                            <ListPlus className="w-12 h-12 text-yellow-600" />
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="7" className="py-24 text-center">
+                                        <Loader2 className="w-8 h-8 animate-spin mx-auto text-yellow-600" />
+                                    </td>
+                                </tr>
+                            ) : requests.length > 0 ? (
+                                requests.map((req) => (
+                                    <tr key={req.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                        <td className="py-4 px-6 font-mono text-xs font-bold text-gray-600">REQ-{req.id}</td>
+                                        <td className="py-4 px-6">
+                                            <div>
+                                                <p className="font-bold text-gray-900 text-sm">{req.productName}</p>
+                                                <p className="text-[10px] text-gray-500">{req.sourceCountry} → {req.destinationCountry}</p>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-sm font-bold text-gray-700">{req.quantity} pcs</td>
+                                        <td className="py-4 px-6 text-xs font-medium text-gray-500">{new Date(req.createdAt).toLocaleDateString()}</td>
+                                        <td className="py-4 px-6 text-center">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${req.priority === 'High' ? 'bg-red-100 text-red-700' :
+                                                req.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                                                    'bg-blue-100 text-blue-700'
+                                                }`}>
+                                                {req.priority || 'Normal'}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${req.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                                                req.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                                                    'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                {req.status}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <button className="text-gray-400 hover:text-yellow-600 transition-colors">
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="7" className="py-24 text-center">
+                                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                                            <div className="bg-yellow-50 p-6 rounded-3xl mb-6 shadow-inner">
+                                                <ListPlus className="w-12 h-12 text-yellow-600" />
+                                            </div>
+                                            <h3 className="text-xl font-black text-gray-900 mb-2">No sourcing requests yet</h3>
+                                            <p className="text-gray-500 font-medium text-sm mb-8">
+                                                It looks like you haven't started any sourcing requests. Click below to find suppliers globally.
+                                            </p>
+                                            <button
+                                                onClick={() => setView('create')}
+                                                className="flex items-center gap-3 bg-yellow-600 hover:bg-yellow-700 text-white px-8 py-3 rounded-xl transition-all font-black shadow-lg shadow-yellow-200 active:scale-95"
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                                Create First Request
+                                            </button>
                                         </div>
-                                        <h3 className="text-xl font-black text-gray-900 mb-2">No sourcing requests yet</h3>
-                                        <p className="text-gray-500 font-medium text-sm mb-8">
-                                            It looks like you haven't started any sourcing requests. Click below to find suppliers globally.
-                                        </p>
-                                        <button
-                                            onClick={() => setView('create')}
-                                            className="flex items-center gap-3 bg-yellow-600 hover:bg-yellow-700 text-white px-8 py-3 rounded-xl transition-all font-black shadow-lg shadow-yellow-200 active:scale-95"
-                                        >
-                                            <Plus className="w-5 h-5" />
-                                            Create First Request
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

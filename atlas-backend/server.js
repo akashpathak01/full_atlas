@@ -37,6 +37,8 @@ app.use('/api/roles', rolesRoutes);
 app.use('/api/sellers', sellersRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/sourcing', require('./src/modules/sourcing/sourcing.routes'));
+app.use('/api/reports', require('./src/modules/reports/reports.routes'));
 
 
 

@@ -36,9 +36,19 @@ model User {
 
 
 model Role {
-  id    Int    @id @default(autoincrement())
-  name  String @unique // One of: SUPER_ADMIN, ADMIN, SELLER, CALL_CENTER_AGENT, CALL_CENTER_MANAGER, STOCK_KEEPER, PACKAGING_AGENT, DELIVERY_AGENT
-  users User[]
+  id          Int          @id @default(autoincrement())
+  name        String       @unique // One of: SUPER_ADMIN, ADMIN, SELLER, CALL_CENTER_AGENT, CALL_CENTER_MANAGER, STOCK_KEEPER, PACKAGING_AGENT, DELIVERY_AGENT
+  users       User[]
+  permissions Permission[]
+}
+
+model Permission {
+  id          Int    @id @default(autoincrement())
+  code        String @unique // e.g. ORDERS_VIEW_ALL
+  module      String // ORDERS, PRODUCTS, etc.
+  action      String // VIEW, CREATE, UPDATE, DELETE
+  description String?
+  roles       Role[]
 }
 
 model Seller {
@@ -49,6 +59,7 @@ model Seller {
   adminId   Int? // The Admin who created/manages this seller
   orders    Order[]
   products  Product[]
+  sourcingRequests SourcingRequest[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -197,6 +208,27 @@ model AuditLog {
   performedByRole String
   metadata        Json?
   createdAt       DateTime @default(now())
+}
+
+
+model SourcingRequest {
+  id                Int      @id @default(autoincrement())
+  productName       String
+  productUrl        String?
+  productImage      String?
+  quantity          Int
+  numberOfCartons   Int?
+  sourceCountry     String
+  destinationCountry String
+  fundingSource     String
+  priority          String?
+  budget            Float?
+  additionalNotes   String?  @db.Text
+  status            String   @default("PENDING_REVIEW") // PENDING_REVIEW, UNDER_REVIEW, APPROVED, REJECTED, IN_SOURCING, COMPLETED
+  sellerId          Int
+  seller            Seller   @relation(fields: [sellerId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model SystemConfiguration {

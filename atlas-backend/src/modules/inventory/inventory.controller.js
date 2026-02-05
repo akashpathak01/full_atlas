@@ -94,6 +94,22 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
+const getSellerInventory = async (req, res) => {
+    try {
+        let user = req.user;
+        if (user.role === 'SELLER' && !user.sellerId) {
+            const seller = await prisma.seller.findUnique({ where: { userId: user.id } });
+            if (seller) user.sellerId = seller.id;
+        }
+
+        const data = await inventoryService.getSellerInventoryStats(user);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching seller inventory:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     createWarehouse,
     listWarehouses,
@@ -102,5 +118,6 @@ module.exports = {
     stockIn,
     stockOut,
     getMovementHistory,
-    getDashboardStats
+    getDashboardStats,
+    getSellerInventory
 };

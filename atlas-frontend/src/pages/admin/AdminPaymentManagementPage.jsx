@@ -1,30 +1,69 @@
-
-import React, { useState } from 'react';
-import { adminPaymentsData } from '../../data/adminDummyData';
-import { Search, Filter, Download, Plus, ArrowLeft, CreditCard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Download, Plus, ArrowLeft, CreditCard, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export function AdminPaymentManagementPage() {
     const navigate = useNavigate();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All Statuses');
+    const { user } = useAuth();
+    const isSuperAdmin = user?.role === 'Super Admin';
 
-    const filteredPayments = adminPaymentsData.filter(payment => {
-        const matchesSearch =
-            payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            payment.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            payment.customer.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === 'All Statuses' || payment.status === statusFilter;
-        return matchesSearch && matchesStatus;
+    const [payments, setPayments] = useState([]);
+    const [stats, setStats] = useState({
+        totalAmount: 0,
+        completedCount: 0,
+        pendingCount: 0
+    });
+    const [pagination, setPagination] = useState({
+        total: 0,
+        page: 1,
+        limit: 10,
+        pages: 1
     });
 
-    const totalAmount = filteredPayments.reduce((sum, payment) => {
-        const amount = parseFloat(payment.amount.replace(/[^0-9.-]+/g, ""));
-        return sum + amount;
-    }, 0);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All Statuses');
+    const [isLoading, setIsLoading] = useState(true);
 
-    const completedCount = filteredPayments.filter(p => p.status === 'Completed').length;
-    const pendingCount = filteredPayments.filter(p => p.status === 'Pending').length;
+    const fetchPayments = async () => {
+        setIsLoading(true);
+        try {
+            const params = {
+                page: pagination.page,
+                limit: pagination.limit,
+                status: statusFilter,
+                search: searchTerm
+            };
+            const response = await api.get('/finance/superadmin/payments', { params });
+            setPayments(response.data.data);
+            setStats(response.data.stats);
+            setPagination(response.data.pagination);
+        } catch (error) {
+            console.error('Failed to fetch payments:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPayments();
+    }, [pagination.page, statusFilter]);
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        setPagination({ ...pagination, page: 1 });
+        fetchPayments();
+    };
+
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-AE', {
+            style: 'currency',
+            currency: 'AED',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount);
+    };
 
     return (
         <div className="space-y-6">
@@ -46,13 +85,15 @@ export function AdminPaymentManagementPage() {
                     >
                         Dashboard
                     </button>
-                    <button
-                        onClick={() => navigate('/admin/finance/payments/add')}
-                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Payment
-                    </button>
+                    {!isSuperAdmin && (
+                        <button
+                            onClick={() => navigate('/admin/finance/payments/add')}
+                            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Payment
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -64,17 +105,17 @@ export function AdminPaymentManagementPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Total Payments</p>
-                        <h3 className="text-xl font-bold text-gray-900">{filteredPayments.length}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : pagination.total}</h3>
                     </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
                     <div className="p-3 bg-blue-50 rounded-xl">
-                        <span className="text-xl font-bold text-blue-600">$</span>
+                        <span className="text-xl font-bold text-blue-600">AED</span>
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Total Amount</p>
-                        <h3 className="text-xl font-bold text-gray-900">AED {totalAmount.toLocaleString()}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : formatCurrency(stats.totalAmount)}</h3>
                     </div>
                 </div>
 
@@ -86,7 +127,7 @@ export function AdminPaymentManagementPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Completed</p>
-                        <h3 className="text-xl font-bold text-gray-900">{completedCount}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : stats.completedCount}</h3>
                     </div>
                 </div>
 
@@ -96,7 +137,7 @@ export function AdminPaymentManagementPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Pending</p>
-                        <h3 className="text-xl font-bold text-gray-900">{pendingCount}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : stats.pendingCount}</h3>
                     </div>
                 </div>
             </div>
@@ -104,7 +145,7 @@ export function AdminPaymentManagementPage() {
             {/* Filters */}
             <div className="bg-orange-50 p-6 rounded-xl border border-orange-100">
                 <h3 className="text-orange-800 font-bold mb-4">Search & Filter</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
                         <select
@@ -113,20 +154,12 @@ export function AdminPaymentManagementPage() {
                             onChange={(e) => setStatusFilter(e.target.value)}
                         >
                             <option>All Statuses</option>
-                            <option>Completed</option>
-                            <option>Pending</option>
-                            <option>Failed</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="CREATED">Pending</option>
+                            <option value="CANCELLED">Failed</option>
                         </select>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
-                        <input type="date" className="w-full border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
-                        <input type="date" className="w-full border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
-                    </div>
-                    <div>
+                    <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -139,23 +172,13 @@ export function AdminPaymentManagementPage() {
                             />
                         </div>
                     </div>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button className="flex items-center px-4 py-2 bg-[#E15B2D] text-white rounded-lg hover:bg-[#c44e26] transition-colors">
-                        <Search className="w-4 h-4 mr-2" />
-                        Filter
-                    </button>
-                    <div className="w-4"></div>
-                    <div className="w-full md:w-auto">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                        <select className="w-full border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500">
-                            <option>All Methods</option>
-                            <option>Credit Card</option>
-                            <option>Bank Transfer</option>
-                            <option>Cash</option>
-                        </select>
+                    <div className="flex items-end">
+                        <button type="submit" className="w-full flex items-center justify-center px-4 py-2 bg-[#E15B2D] text-white rounded-lg hover:bg-[#c44e26] transition-colors">
+                            <Search className="w-4 h-4 mr-2" />
+                            Filter
+                        </button>
                     </div>
-                </div>
+                </form>
             </div>
 
             {/* Payments Table */}
@@ -178,6 +201,7 @@ export function AdminPaymentManagementPage() {
                                     <th className="px-6 py-3">Payment ID</th>
                                     <th className="px-6 py-3">Order ID</th>
                                     <th className="px-6 py-3">Customer</th>
+                                    <th className="px-6 py-3">Seller</th>
                                     <th className="px-6 py-3">Amount</th>
                                     <th className="px-6 py-3">Method</th>
                                     <th className="px-6 py-3">Status</th>
@@ -186,13 +210,20 @@ export function AdminPaymentManagementPage() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredPayments.length > 0 ? (
-                                    filteredPayments.map((payment) => (
+                                {isLoading ? (
+                                    <tr>
+                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-500">Loading payments...</td>
+                                    </tr>
+                                ) : payments.length > 0 ? (
+                                    payments.map((payment) => (
                                         <tr key={payment.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.id}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800 cursor-pointer">{payment.orderId}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800 cursor-pointer" onClick={() => navigate(`/admin/orders/${payment.id.split('-')[1]}`)}>
+                                                {payment.orderId}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{payment.customer}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.amount}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{payment.seller}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatCurrency(payment.amount)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{payment.method}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -204,13 +235,13 @@ export function AdminPaymentManagementPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{payment.date}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <button className="text-blue-600 hover:text-blue-900">View</button>
+                                                <button className="text-blue-600 hover:text-blue-900" onClick={() => navigate(`/admin/orders/${payment.id.split('-')[1]}`)}>View</button>
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
                                             No payments found.
                                         </td>
                                     </tr>
@@ -218,29 +249,8 @@ export function AdminPaymentManagementPage() {
                             </tbody>
                         </table>
                     </div>
-                    <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
-                        <span>Showing {filteredPayments.length} of {adminPaymentsData.length} results</span>
-                        <button className="flex items-center px-4 py-2 bg-[#4b5563] text-white rounded-lg hover:bg-[#374151] transition-colors">
-                            <Download className="w-4 h-4 mr-2" />
-                            Export
-                        </button>
-                    </div>
                 </div>
             </div>
-
-            {/* Help Button */}
-            <button className="fixed bottom-6 right-6 w-14 h-14 bg-[#5c6ac4] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#4d59ad] transition-transform hover:scale-105 z-50 text-2xl font-bold">
-                ?
-            </button>
         </div>
-    );
-}
-
-// Icon component needed for stats
-function Clock({ className }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
     );
 }

@@ -5,41 +5,46 @@ const listRoles = async () => {
         include: {
             _count: {
                 select: { users: true }
-            }
+            },
+            permissions: true
         }
     });
 
-    // Mapping to match frontend expected structure if needed
     return roles.map(role => ({
         id: role.id,
         name: role.name,
         users: role._count.users,
-        // Mock permissions and description for now as they are not in schema yet
-        // In a real app, these would be in the Role model or a Permissions model
-        permissions: ['READ', 'WRITE'],
+        permissions: role.permissions,
         description: `Manage ${role.name.toLowerCase()} operations`,
         status: 'Active'
     }));
 };
 
 const getPermissions = async () => {
-    // Return all available permissions in the system
-    return [
-        'DASHBOARD_VIEW',
-        'USERS_MANAGE',
-        'ROLES_MANAGE',
-        'SELLERS_MANAGE',
-        'ORDERS_VIEW',
-        'ORDERS_MANAGE',
-        'PRODUCTS_MANAGE',
-        'INVENTORY_MANAGE',
-        'FINANCE_VIEW',
-        'AUDIT_LOGS_VIEW',
-        'SYSTEM_CONFIG_MANAGE'
-    ];
+    return await prisma.permission.findMany();
+};
+
+const updatePermissions = async (roleId, permissionIds) => {
+    // 1. Disconnect all existing
+    // 2. Connect new ones
+    // simpler: using set (if array provided) or explicit loop
+
+    // We expect permissionIds to be an array of integers (IDs)
+    return await prisma.role.update({
+        where: { id: parseInt(roleId) },
+        data: {
+            permissions: {
+                set: permissionIds.map(id => ({ id: parseInt(id) }))
+            }
+        },
+        include: {
+            permissions: true
+        }
+    });
 };
 
 module.exports = {
     listRoles,
-    getPermissions
+    getPermissions,
+    updatePermissions
 };

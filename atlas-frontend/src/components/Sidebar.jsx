@@ -33,7 +33,6 @@ const roleMenus = {
         { icon: DollarSign, label: 'Finance', href: '/admin/finance' },
         { icon: PieChart, label: 'Reports', href: '/admin/finance/reports' },
         { icon: FileText, label: 'Audit Logs', href: '/super-admin/audit-logs' },
-        { icon: UserCheck, label: 'Subscribers', href: '/admin/subscribers' },
     ],
     'Admin': [
         { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
@@ -46,7 +45,6 @@ const roleMenus = {
         { icon: Headphones, label: 'Call Center', href: '/admin/call-center' },
         { icon: Truck, label: 'Delivery', href: '/admin/delivery' },
         { icon: DollarSign, label: 'Finance', href: '/admin/finance' },
-        { icon: UserCheck, label: 'Subscribers', href: '/admin/subscribers' },
     ],
     'Seller': [
         { icon: LayoutDashboard, label: 'Dashboard', href: '/seller/dashboard' },

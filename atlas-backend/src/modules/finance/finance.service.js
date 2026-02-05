@@ -90,7 +90,80 @@ const getFinancialOrders = async (user, page = 1, limit = 50) => {
     };
 };
 
+const getSellerFinanceData = async (userId) => {
+    const seller = await prisma.seller.findUnique({
+        where: { userId },
+        include: { user: true }
+    });
+
+    if (!seller) throw new Error('Seller profile not found');
+
+    const orders = await prisma.order.findMany({
+        where: { sellerId: seller.id },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    // Calculate Stats
+    let totalRevenue = 0;
+    let monthlyRevenue = 0;
+    let pendingPayments = 0;
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    // Map Orders to Transactions
+    const transactions = orders.map(order => {
+        const amount = order.totalAmount || 0;
+        const date = new Date(order.createdAt);
+        const isThisMonth = date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+
+        // Revenue Calculation (Confirmed orders count as revenue for now, until we have paymentStatus)
+        const isRevenue = ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'].includes(order.status);
+
+        if (isRevenue) {
+            totalRevenue += amount;
+            if (isThisMonth) monthlyRevenue += amount;
+        }
+
+        // Pending Payments (Not yet delivered)
+        if (order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && order.status !== 'RETURNED') {
+            pendingPayments += amount;
+        }
+
+        // Determine Transaction Status
+        let status = 'Pending';
+        if (order.status === 'DELIVERED') status = 'Completed';
+        if (order.status === 'CANCELLED') status = 'Failed';
+
+        // Transaction Type
+        let type = 'Incoming'; // Default for orders
+
+        return {
+            id: `TXN-${order.orderNumber}`,
+            desc: `Order #${order.orderNumber} Payment`,
+            type: type,
+            amount: `AED ${amount.toFixed(2)}`,
+            status: status,
+            date: date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            originalDate: date // for sorting if needed later
+        };
+    });
+
+    // Calculate Commission (Mock 10%)
+    const commission = totalRevenue * 0.10;
+
+    return {
+        stats: {
+            totalRevenue: `AED ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            monthlyRevenue: `AED ${monthlyRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            pendingPayments: `AED ${pendingPayments.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            commission: `AED ${commission.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        },
+        transactions
+    };
+};
+
 module.exports = {
     getSummary,
-    getFinancialOrders
+    getFinancialOrders,
+    getSellerFinanceData
 };

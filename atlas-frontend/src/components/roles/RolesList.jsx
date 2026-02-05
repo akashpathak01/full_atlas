@@ -37,7 +37,7 @@ const colorMap = {
     'DELIVERY_AGENT': { bgColor: 'bg-red-50', iconColor: 'text-red-600' }
 };
 
-export function RolesList({ onAddUser, onManagePermissions }) {
+export function RolesList({ onAddUser, onManagePermissions, onEditRole }) {
     const [roles, setRoles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -166,7 +166,10 @@ export function RolesList({ onAddUser, onManagePermissions }) {
                                 <p className="text-sm font-bold text-gray-900">{role.users} users</p>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Created {role.created}</p>
                             </div>
-                            <div className="p-1.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100 text-gray-400 hover:text-blue-600">
+                            <div
+                                onClick={() => onEditRole(role)}
+                                className="p-1.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100 text-gray-400 hover:text-blue-600"
+                            >
                                 <Edit className="w-5 h-5" />
                             </div>
                         </div>

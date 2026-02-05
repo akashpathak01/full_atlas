@@ -28,7 +28,6 @@ import { AdminSuppliersPage } from './pages/admin/AdminSuppliersPage';
 import { AdminPackagingPage } from './pages/admin/AdminPackagingPage';
 import { AdminCallCenterPage } from './pages/admin/AdminCallCenterPage';
 import { AdminDeliveryPage } from './pages/admin/AdminDeliveryPage';
-import { AdminSubscribersPage } from './pages/admin/AdminSubscribersPage';
 import { AdminRolesPage } from './pages/admin/AdminRolesPage';
 import { AdminSystemConfigurationPage } from './pages/admin/AdminSystemConfigurationPage';
 import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
@@ -272,11 +271,6 @@ function App() {
               </MainLayout>
             } />
 
-            <Route path="/admin/subscribers" element={
-              <MainLayout>
-                <AdminSubscribersPage />
-              </MainLayout>
-            } />
 
             <Route path="/admin/roles" element={
               <MainLayout>

@@ -2,11 +2,21 @@ import React, { useState } from 'react';
 import { RolesList } from './RolesList';
 import { PermissionsManagement } from './PermissionsManagement';
 import { CreateUserForm } from './CreateUserForm';
+import { RolePermissionEditor } from './RolePermissionEditor';
 
 export function RolesManager() {
-    const [activeView, setActiveView] = useState('list'); // 'list' | 'permissions' | 'add-user'
+    const [selectedRole, setSelectedRole] = useState(null);
+    const [activeView, setActiveView] = useState('list'); // 'list' | 'permissions' | 'add-user' | 'edit-role'
 
-    const handleBackToList = () => setActiveView('list');
+    const handleBackToList = () => {
+        setActiveView('list');
+        setSelectedRole(null);
+    };
+
+    const handleEditRole = (role) => {
+        setSelectedRole(role);
+        setActiveView('edit-role');
+    };
 
     return (
         <div className="min-h-screen bg-gray-50/50 p-6">
@@ -15,6 +25,7 @@ export function RolesManager() {
                     <RolesList
                         onAddUser={() => setActiveView('add-user')}
                         onManagePermissions={() => setActiveView('permissions')}
+                        onEditRole={handleEditRole}
                     />
                 )}
 
@@ -24,6 +35,13 @@ export function RolesManager() {
 
                 {activeView === 'add-user' && (
                     <CreateUserForm onBack={handleBackToList} />
+                )}
+
+                {activeView === 'edit-role' && selectedRole && (
+                    <RolePermissionEditor
+                        role={selectedRole}
+                        onBack={handleBackToList}
+                    />
                 )}
             </div>
         </div>

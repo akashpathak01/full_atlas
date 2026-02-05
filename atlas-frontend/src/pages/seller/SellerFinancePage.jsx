@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
-import { sellerFinanceData } from '../../data/sellerDummyData';
+import React, { useState, useEffect } from 'react';
+import api from '../../lib/api';
 import { DollarSign, Plus, Upload, Home, Search, Banknote, Percent, Clock, TrendingUp, X, Save, Download, LayoutDashboard, Calendar, Eye, FileText, Wallet, ArrowUpRight, ArrowDownLeft, BarChart2, ArrowLeft, PlusCircle, Info, Globe, ChevronDown, Image as ImageIcon, Link } from 'lucide-react';
 
 export function SellerFinancePage() {
     const [view, setView] = useState('list'); // 'list' or 'add'
-    const [transactions, setTransactions] = useState(sellerFinanceData.transactions);
+    const [transactions, setTransactions] = useState([]);
+    const [allTransactions, setAllTransactions] = useState([]); // Store master list
+    const [stats, setStats] = useState({
+        totalRevenue: 'AED 0.00',
+        monthlyRevenue: 'AED 0.00',
+        pendingPayments: 'AED 0.00',
+        commission: 'AED 0.00'
+    });
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState('All Types');
     const [statusFilter, setStatusFilter] = useState('All Status');
@@ -13,8 +21,26 @@ export function SellerFinancePage() {
     const [selectedTxn, setSelectedTxn] = useState(null);
     const [showViewModal, setShowViewModal] = useState(false);
 
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const res = await api.get('/finance/seller');
+                if (res.data) {
+                    setStats(res.data.stats);
+                    setTransactions(res.data.transactions);
+                    setAllTransactions(res.data.transactions); // Save master copy
+                }
+            } catch (err) {
+                console.error("Failed to fetch finance data:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
     const handleFilter = () => {
-        let filtered = [...sellerFinanceData.transactions];
+        let filtered = [...allTransactions];
 
         // Search Filter
         if (searchTerm.trim()) {
@@ -42,7 +68,7 @@ export function SellerFinancePage() {
         setSearchTerm('');
         setTypeFilter('All Types');
         setStatusFilter('All Status');
-        setTransactions(sellerFinanceData.transactions);
+        setTransactions(allTransactions);
     };
 
     const handleViewTxn = (txn) => {
@@ -314,7 +340,7 @@ export function SellerFinancePage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Total Revenue</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{sellerFinanceData.stats.totalRevenue}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.totalRevenue}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -323,7 +349,7 @@ export function SellerFinancePage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Monthly Revenue</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{sellerFinanceData.stats.monthlyRevenue}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.monthlyRevenue}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -332,7 +358,7 @@ export function SellerFinancePage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Pending Payments</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{sellerFinanceData.stats.pendingPayments}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.pendingPayments}</h3>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center">
@@ -341,7 +367,7 @@ export function SellerFinancePage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 mb-1">Commission</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{sellerFinanceData.stats.commission}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.commission}</h3>
                     </div>
                 </div>
             </div>

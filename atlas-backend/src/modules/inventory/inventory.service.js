@@ -185,8 +185,8 @@ const getMovementHistory = async (currentUser, filters = {}) => {
     if (search) {
         where.OR = [
             { id: isNaN(parseInt(search)) ? undefined : parseInt(search) },
-            { 
-                inventory: { 
+            {
+                inventory: {
                     OR: [
                         { product: { name: { contains: search } } },
                         { product: { sku: { contains: search } } }
@@ -258,7 +258,7 @@ const getDashboardStats = async (period = 'All Time') => {
         by: ['warehouseId'],
         _sum: { quantity: true }
     });
-    
+
     // Fetch warehouse names for grouping
     const warehouses = await prisma.warehouse.findMany();
     const chartData = warehouses.map(w => ({
@@ -280,6 +280,78 @@ const getDashboardStats = async (period = 'All Time') => {
     };
 };
 
+const getSellerInventoryStats = async (user) => {
+    const { sellerId } = user;
+    if (!sellerId) return { inventory: [], stats: {} };
+
+    // 1. Fetch filtered inventory
+    // Sellers see products they own. 
+    // Products might be in Inventory table (if assigned to warehouse) or just Product table (if just created).
+    // The UI implies these are "Inventory" items (warehouse assigned).
+    // But the "Add Product" note says "can add even if no warehouse".
+    // Let's fetch Products and left-join Inventory to show stock.
+    // If a product has no inventory record, it has 0 stock.
+
+    const products = await prisma.product.findMany({
+        where: { sellerId },
+        include: {
+            inventory: {
+                include: { warehouse: true }
+            }
+        },
+        orderBy: { updatedAt: 'desc' }
+    });
+
+    // 2. Map to UI structure & Calculate Stats
+    let totalItems = 0;
+    let lowStock = 0;
+    let outOfStock = 0;
+    const warehouseSet = new Set();
+
+    const formattedInventory = products.map(p => {
+        // Aggregating stock across all warehouses for this product
+        const totalStock = p.inventory.reduce((sum, inv) => sum + inv.quantity, 0);
+
+        // Warehouses list
+        const warehouses = p.inventory.map(i => i.warehouse.name).join(', ') || 'Unassigned';
+        p.inventory.forEach(i => warehouseSet.add(i.warehouseId));
+
+        // Stats calculation
+        totalItems++;
+        if (totalStock === 0) outOfStock++;
+        else if (totalStock <= 10) lowStock++; // Assuming 10 is low stock threshold
+
+        // Status determination
+        let stockStatus = 'In Stock';
+        if (totalStock === 0) stockStatus = 'Out of Stock';
+        else if (totalStock <= 10) stockStatus = 'Low Stock';
+
+        return {
+            id: p.id,
+            name: p.name,
+            sku: p.sku || 'N/A',
+            model: p.model || 'N/A', // Assuming model field exists or using filler
+            category: p.category || 'Uncategorized',
+            price: `AED ${p.price}`,
+            stock: totalStock,
+            stockStatus,
+            status: p.status || 'Active', // status field on Product
+            warehouse: warehouses,
+            lastUpdated: new Date(p.updatedAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+        };
+    });
+
+    return {
+        inventory: formattedInventory,
+        stats: {
+            totalItems,
+            lowStock,
+            outOfStock,
+            warehouses: warehouseSet.size || (totalItems > 0 ? 1 : 0) // Default to 1 if items exist but no warehouse assigned? Or 0. UI shows 1 in mock.
+        }
+    };
+};
+
 module.exports = {
     createWarehouse,
     listWarehouses,
@@ -287,5 +359,6 @@ module.exports = {
     stockIn,
     stockOut,
     getMovementHistory,
-    getDashboardStats
+    getDashboardStats,
+    getSellerInventoryStats
 };

@@ -1,27 +1,59 @@
-
-import React from 'react';
-import { adminPaymentPlatformsData } from '../../data/adminDummyData';
+import React, { useState, useEffect } from 'react';
 import { Plug, Plus, Home, CheckCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export function AdminPaymentPlatformsPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const isSuperAdmin = user?.role === 'Super Admin';
+
+    const [stats, setStats] = useState({
+        totalPlatforms: 0,
+        activeConnections: 0,
+        pendingVerification: 0
+    });
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchPlatformStats = async () => {
+            setIsLoading(true);
+            try {
+                const response = await api.get('/finance/superadmin/platforms');
+                setStats(response.data);
+            } catch (error) {
+                console.error('Failed to fetch platform stats:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchPlatformStats();
+    }, []);
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Payment Platform Integrations</h1>
                     <p className="text-sm text-gray-600 mt-1">Manage payment platform integrations for automated data sync</p>
                 </div>
                 <div className="flex gap-3">
                     <button
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        onClick={() => navigate('/admin/finance')}
+                        className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
                     >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Platform
+                        Dashboard
                     </button>
+                    {!isSuperAdmin && (
+                        <button
+                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Platform
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -33,7 +65,7 @@ export function AdminPaymentPlatformsPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Total Platforms</p>
-                        <h3 className="text-xl font-bold text-gray-900">0</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : stats.totalPlatforms}</h3>
                     </div>
                 </div>
 
@@ -43,7 +75,7 @@ export function AdminPaymentPlatformsPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Active Connections</p>
-                        <h3 className="text-xl font-bold text-gray-900">0</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : stats.activeConnections}</h3>
                     </div>
                 </div>
 
@@ -53,7 +85,7 @@ export function AdminPaymentPlatformsPage() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Pending Verification</p>
-                        <h3 className="text-xl font-bold text-gray-900">0</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isLoading ? '...' : stats.pendingVerification}</h3>
                     </div>
                 </div>
             </div>
@@ -68,10 +100,12 @@ export function AdminPaymentPlatformsPage() {
                     <Plug className="w-16 h-16 text-gray-300 mb-4" />
                     <h3 className="text-lg font-bold text-gray-900">No payment platform integrations found</h3>
                     <p className="text-gray-500 mt-1 mb-6">Add payment platform integrations to automate data synchronization.</p>
-                    <button className="flex items-center px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                        <Plus className="w-5 h-5 mr-2" />
-                        Add Your First Platform
-                    </button>
+                    {!isSuperAdmin && (
+                        <button className="flex items-center px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                            <Plus className="w-5 h-5 mr-2" />
+                            Add Your First Platform
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -124,10 +158,6 @@ export function AdminPaymentPlatformsPage() {
                     </div>
                 </div>
             </div>
-
-            <button className="fixed bottom-6 right-6 w-14 h-14 bg-[#5c6ac4] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#4d59ad] transition-transform hover:scale-105 z-50 text-2xl font-bold">
-                ?
-            </button>
         </div>
     );
 }

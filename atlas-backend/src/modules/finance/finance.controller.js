@@ -21,7 +21,18 @@ const getOrders = async (req, res) => {
     }
 };
 
+const getSellerFinance = async (req, res) => {
+    try {
+        const data = await financeService.getSellerFinanceData(req.user.id);
+        res.json(data);
+    } catch (error) {
+        console.error("Seller Finance Error:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     getSummary,
-    getOrders
+    getOrders,
+    getSellerFinance
 };

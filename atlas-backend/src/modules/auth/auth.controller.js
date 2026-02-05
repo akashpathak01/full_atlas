@@ -8,7 +8,13 @@ const login = async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
             where: { email },
-            include: { role: true }
+            include: {
+                role: {
+                    include: {
+                        permissions: true
+                    }
+                }
+            }
         });
 
         if (!user) {
@@ -22,9 +28,10 @@ const login = async (req, res) => {
         }
 
         const roleName = user.role ? user.role.name : null;
+        const permissions = user.role && user.role.permissions ? user.role.permissions.map(p => p.code) : [];
 
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: roleName },
+            { id: user.id, email: user.email, role: roleName, permissions },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -35,7 +42,8 @@ const login = async (req, res) => {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: roleName
+                role: roleName,
+                permissions
             }
         });
     } catch (error) {
@@ -85,13 +93,23 @@ const getMe = async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: req.user.id },
-            include: { role: true }
+            include: {
+                role: {
+                    include: {
+                        permissions: true
+                    }
+                }
+            }
         });
+
+        const permissions = user.role && user.role.permissions ? user.role.permissions.map(p => p.code) : [];
+
         res.json({
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role ? user.role.name : null
+            role: user.role ? user.role.name : null,
+            permissions
         });
     } catch (error) {
         res.status(500).json({ message: 'Error fetching user data' });
