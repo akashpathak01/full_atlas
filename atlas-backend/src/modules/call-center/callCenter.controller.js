@@ -21,7 +21,8 @@ const getCustomerById = async (req, res) => {
 
 const getOrders = async (req, res) => {
     try {
-        const orders = await callCenterService.getOrders();
+        const filters = req.query;
+        const orders = await callCenterService.getOrders(filters, req.user);
         res.json(orders);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -183,6 +184,16 @@ const createAgent = async (req, res) => {
     }
 };
 
+const getAgentStats = async (req, res) => {
+    try {
+        const stats = await callCenterService.getAgentStats(req.user.id);
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching agent stats:', error);
+        res.status(500).json({ message: 'Error fetching agent stats', error: error.message });
+    }
+};
+
 module.exports = {
     getCustomers,
     getCustomerById,
@@ -201,6 +212,8 @@ module.exports = {
     updateManagerOrder,
     updateAgent,
     getPerformanceReports,
+    getPerformanceReports,
     getOrderStatistics,
-    createAgent
+    createAgent,
+    getAgentStats
 };

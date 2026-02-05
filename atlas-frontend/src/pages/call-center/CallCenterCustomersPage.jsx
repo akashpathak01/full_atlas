@@ -1,16 +1,33 @@
-import React, { useState } from 'react';
-import { customerData } from '../../data/customerDummyData';
+import React, { useState, useEffect } from 'react';
 import { Home, Users, Search, Eye, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 
 export function CallCenterCustomersPage() {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const filteredCustomers = customerData.filter(customer =>
+    useEffect(() => {
+        fetchCustomers();
+    }, []);
+
+    const fetchCustomers = async () => {
+        try {
+            const res = await api.get('/call-center/customers');
+            setCustomers(res.data);
+        } catch (error) {
+            console.error('Error fetching customers:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filteredCustomers = customers.filter(customer =>
         customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.phone.includes(searchQuery) ||
-        customer.email.toLowerCase().includes(searchQuery.toLowerCase())
+        (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     return (
@@ -89,7 +106,7 @@ export function CallCenterCustomersPage() {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <button
-                                                onClick={() => navigate(`/call-center/customers/${customer.id}`)}
+                                                onClick={() => navigate(`/call-center/customers/${customer.dbId}`)}
                                                 className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-xs font-bold transition-all active:scale-95"
                                             >
                                                 <Eye className="w-4 h-4 mr-1.5" />

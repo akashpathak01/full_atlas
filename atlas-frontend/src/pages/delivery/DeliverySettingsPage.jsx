@@ -1,11 +1,32 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, Truck, Users } from 'lucide-react';
-import { deliveryPerformanceData } from '../../data/deliveryDummyData';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 
 export function DeliverySettingsPage() {
     const navigate = useNavigate();
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [stats, setStats] = useState({ total: 0, completed: 0 });
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        
+        const fetchStats = async () => {
+            try {
+                const res = await api.get('/delivery/stats');
+                setStats({
+                    total: res.data.total,
+                    completed: res.data.delivered
+                });
+            } catch (error) {
+                console.error("Error fetching stats:", error);
+            }
+        };
+
+        fetchStats();
+        return () => clearInterval(timer);
+    }, []);
 
     return (
         <div className="space-y-6">
@@ -28,7 +49,12 @@ export function DeliverySettingsPage() {
                 </div>
                 <div className="text-right">
                     <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Current Time</p>
-                    <p className="text-xl font-bold text-gray-900 font-mono">{deliveryPerformanceData.currentTime}</p>
+                    <p className="text-xl font-bold text-gray-900 font-mono">{currentTime.toLocaleTimeString()}</p>
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">Delivery Stats</p>
+                        <div className="text-sm text-gray-600">Total Orders: <span className="font-semibold">{stats.total}</span></div>
+                        <div className="text-sm text-green-600">Completed: <span className="font-semibold">{stats.completed}</span></div>
+                    </div>
                 </div>
             </div>
 

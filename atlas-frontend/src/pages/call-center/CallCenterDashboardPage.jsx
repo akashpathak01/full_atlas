@@ -1,9 +1,49 @@
-
-import React from 'react';
-import { callCenterDashboardData } from '../../data/callCenterDummyData';
+import React, { useState, useEffect } from 'react';
 import { Headphones, List, CheckCircle, Clock, XCircle, Phone } from 'lucide-react';
+import api from '../../lib/api';
 
 export function CallCenterDashboardPage() {
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [stats, setStats] = useState({
+        assignedOrders: 0,
+        confirmedOrders: 0,
+        postponedOrders: 0,
+        cancelledOrders: 0,
+        totalCalls: 0
+    });
+    const [priorityOrders, setPriorityOrders] = useState([]);
+    const [recentActivity, setRecentActivity] = useState([]);
+    const [userName, setUserName] = useState('Call Center Agent');
+    const [lastLogin, setLastLogin] = useState('--');
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        fetchDashboardData();
+        // Set user name from local storage or context if available, else default
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.name) setUserName(user.name);
+        setLastLogin(new Date().toLocaleString()); // Just for display for now
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            const res = await api.get('/call-center/agent-stats');
+            setStats(res.data.stats);
+            setPriorityOrders(res.data.priorityOrders);
+            setRecentActivity(res.data.recentActivity);
+        } catch (error) {
+            console.error("Error fetching agent dashboard stats:", error);
+        }
+    };
+
+    const handleCallNow = (order) => {
+        alert(`Initiating call for Order #${order.id} (${order.customer})`);
+        // Future: Open call modal or integration
+    };
     return (
         <div className="space-y-6">
             {/* Breadcrumb */}
@@ -29,11 +69,11 @@ export function CallCenterDashboardPage() {
                 <div className="text-right">
                     <div className="flex items-center justify-end text-sm text-gray-500 mb-1">
                         <span className="mr-2">Current Time</span>
-                        <span className="text-xl font-bold text-gray-900">{callCenterDashboardData.currentTime}</span>
+                        <span className="text-xl font-bold text-gray-900">{currentTime.toLocaleTimeString()}</span>
                     </div>
                     <div className="flex items-center justify-end text-sm text-gray-500">
                         <span className="mr-2">Today's Date</span>
-                        <span className="text-lg font-bold text-gray-900">{callCenterDashboardData.currentDate}</span>
+                        <span className="text-lg font-bold text-gray-900">{currentTime.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                     </div>
                 </div>
             </div>
@@ -53,10 +93,10 @@ export function CallCenterDashboardPage() {
                         </p>
                     </div>
                 </div>
-                <div className="text-right relative z-10">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide">Last Login</p>
-                    <p className="text-sm font-bold text-gray-700">{callCenterDashboardData.lastLogin}</p>
-                </div>
+                    <div className="text-right relative z-10">
+                        <p className="text-xs text-gray-400 uppercase tracking-wide">Last Login</p>
+                        <p className="text-sm font-bold text-gray-700">{lastLogin}</p>
+                    </div>
                 {/* Decorative blob similar to screenshot */}
                 <div className="absolute right-0 top-0 h-full w-2 bg-gradient-to-b from-orange-400 to-orange-500"></div>
             </div>
@@ -69,7 +109,7 @@ export function CallCenterDashboardPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Assigned Orders</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{callCenterDashboardData.stats.assignedOrders}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.assignedOrders}</h3>
                         <p className="text-xs text-blue-600 font-medium">↑ Active</p>
                     </div>
                 </div>
@@ -80,7 +120,7 @@ export function CallCenterDashboardPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Confirmed Orders</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{callCenterDashboardData.stats.confirmedOrders}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.confirmedOrders}</h3>
                         <p className="text-xs text-green-600 font-medium">↑ Completed</p>
                     </div>
                 </div>
@@ -91,7 +131,7 @@ export function CallCenterDashboardPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Postponed Orders</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{callCenterDashboardData.stats.postponedOrders}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.postponedOrders}</h3>
                         <p className="text-xs text-orange-600 font-medium">↑ Pending</p>
                     </div>
                 </div>
@@ -102,7 +142,7 @@ export function CallCenterDashboardPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Cancelled Orders</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{callCenterDashboardData.stats.cancelledOrders}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.cancelledOrders}</h3>
                         <p className="text-xs text-red-600 font-medium">↑ Cancelled</p>
                     </div>
                 </div>
@@ -113,7 +153,7 @@ export function CallCenterDashboardPage() {
                     </div>
                     <div>
                         <p className="text-xs text-gray-500 mb-1">Total Calls Today</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{callCenterDashboardData.stats.totalCalls}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.totalCalls}</h3>
                         <p className="text-xs text-purple-600 font-medium">↑ Today</p>
                     </div>
                 </div>
@@ -136,7 +176,7 @@ export function CallCenterDashboardPage() {
                         <button className="text-xs font-bold text-orange-500 hover:text-orange-600">View all</button>
                     </div>
                     <div className="p-5 space-y-4">
-                        {callCenterDashboardData.priorityOrders.map((order, idx) => (
+                        {priorityOrders.map((order, idx) => (
                             <div key={idx} className="bg-gray-50 rounded-xl p-4 flex justify-between items-center relative overflow-hidden group hover:shadow-md transition-shadow">
                                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-400"></div>
                                 <div className="flex items-start pl-3">
@@ -148,18 +188,24 @@ export function CallCenterDashboardPage() {
                                     <div>
                                         <h4 className="font-bold text-gray-900 text-sm">{order.id} - {order.customer}</h4>
                                         <div className="flex items-center text-xs text-gray-500 mt-1">
-                                            <span className="bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 font-medium mr-2">{order.product}</span>
-                                            <span>• {order.units} units</span>
+                                            <span className="bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 font-medium mr-2">{order.units !== 'N/A' ? `${order.units} AED` : 'General'}</span>
+                                            <span>• Priority</span>
                                         </div>
                                         <p className="text-xs text-gray-400 mt-1">{order.date}</p>
                                     </div>
                                 </div>
-                                <button className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center text-xs font-bold shadow-sm shadow-orange-200">
+                                <button
+                                    onClick={() => handleCallNow(order)}
+                                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center text-xs font-bold shadow-sm shadow-orange-200"
+                                >
                                     <Phone className="w-3 h-3 mr-1.5" />
                                     Call Now
                                 </button>
                             </div>
                         ))}
+                        {priorityOrders.length === 0 && (
+                            <div className="text-center py-8 text-gray-500 text-sm">No priority orders</div>
+                        )}
                     </div>
                 </div>
 
@@ -176,13 +222,30 @@ export function CallCenterDashboardPage() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
-                            <Phone className="w-8 h-8" />
+                    {recentActivity.length > 0 ? (
+                        <div className="flex-1 flex flex-col p-5 space-y-4 overflow-y-auto max-h-[400px]">
+                            {recentActivity.map((activity, idx) => (
+                                <div key={idx} className="flex items-start pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                                    <div className="p-2 bg-blue-50 rounded-full mr-3">
+                                        <Phone className="w-4 h-4 text-blue-500" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-900">{activity.description}</h4>
+                                        <p className="text-xs text-gray-500 mt-1">{activity.note}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">{activity.time}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <h4 className="text-gray-900 font-medium mb-1">No Recent Activity</h4>
-                        <p className="text-gray-500 text-sm">Start making calls to see your activity here</p>
-                    </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
+                                <Phone className="w-8 h-8" />
+                            </div>
+                            <h4 className="text-gray-900 font-medium mb-1">No Recent Activity</h4>
+                            <p className="text-gray-500 text-sm">Start making calls to see your activity here</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
