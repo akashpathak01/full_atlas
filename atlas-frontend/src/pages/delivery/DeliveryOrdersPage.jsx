@@ -70,8 +70,10 @@ export function DeliveryOrdersPage() {
         setDeliveryNotes('');
     };
 
-    const confirmCompleteDelivery = async (status) => {
-        if (!completeDeliveryOrder) return;
+    const confirmCompleteDelivery = async (status, orderToComplete = null) => {
+        const targetOrder = orderToComplete || completeDeliveryOrder;
+
+        if (!targetOrder) return;
 
         if (status === 'DELIVERED' && !receiverName.trim()) {
             alert("Receiver name is required for successful delivery.");
@@ -80,7 +82,7 @@ export function DeliveryOrdersPage() {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.patch(`http://localhost:5000/api/orders/${completeDeliveryOrder.id}/status`,
+            await axios.patch(`http://localhost:5000/api/orders/${targetOrder.id}/status`,
                 {
                     status: status,
                     receiverName: receiverName,
@@ -254,7 +256,11 @@ export function DeliveryOrdersPage() {
                                                     Complete
                                                 </button>
                                                 <button
-                                                    onClick={() => confirmCompleteDelivery('DELIVERY_FAILED')}
+                                                    onClick={() => {
+                                                        if (confirm(`Mark order ${order.orderNumber} as FAILED?`)) {
+                                                            confirmCompleteDelivery('DELIVERY_FAILED', order);
+                                                        }
+                                                    }}
                                                     className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs border border-red-200"
                                                 >
                                                     Fail

@@ -5,24 +5,25 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 
-export function NewProductForm({ onBack, onSubmit }) {
+export function NewProductForm({ onBack, onSubmit, initialData = null }) {
     const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || '{}'));
     const [sellers, setSellers] = useState([]);
+    const isEditing = !!initialData;
     const [formData, setFormData] = useState({
-        nameEn: '',
-        nameAr: '',
-        code: 'Auto-generated',
-        category: '',
-        purchasePrice: '',
-        sellingPrice: '',
+        nameEn: initialData?.name || '',
+        nameAr: initialData?.nameAr || '',
+        code: initialData?.sku || 'Auto-generated',
+        category: initialData?.category || '',
+        purchasePrice: initialData?.purchasePrice || '',
+        sellingPrice: initialData?.sellingPrice || '',
         profitMargin: '',
-        stock: '0',
-        warehouse: '',
-        productLink: '',
-        description: '',
-        variants: [],
-        image: null,
-        sellerId: ''
+        stock: initialData?.stockQuantity || '0',
+        warehouse: initialData?.inventory?.[0]?.warehouseId || '',
+        productLink: initialData?.productLink || '',
+        description: initialData?.description || '',
+        variants: initialData?.variants || [],
+        image: initialData?.image || null,
+        sellerId: initialData?.sellerId || ''
     });
 
     useEffect(() => {
@@ -79,6 +80,31 @@ export function NewProductForm({ onBack, onSubmit }) {
         }));
     };
 
+    const fileInputRef = React.useRef(null);
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 10 * 1024 * 1024) {
+                alert("File is too large. Max size is 10MB.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData(prev => ({
+                    ...prev,
+                    image: reader.result
+                }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const triggerFileInput = () => {
+        fileInputRef.current?.click();
+    };
+
     const handleSubmit = () => {
         // Map to backend expected format
         const payload = {
@@ -94,7 +120,8 @@ export function NewProductForm({ onBack, onSubmit }) {
             status: 'Active',
             warehouse: formData.warehouse,
             variants: formData.variants,
-            sellerId: formData.sellerId
+            sellerId: formData.sellerId,
+            image: formData.image
         };
         onSubmit(payload);
     };
@@ -108,6 +135,13 @@ export function NewProductForm({ onBack, onSubmit }) {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageChange}
+                accept="image/*"
+                className="hidden"
+            />
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -127,8 +161,8 @@ export function NewProductForm({ onBack, onSubmit }) {
                         <Plus className="w-6 h-6 text-[#E15B2D]" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-[#E15B2D]">Add New Product</h1>
-                        <p className="text-sm text-gray-500">Fill in the details below to add a new product to your inventory</p>
+                        <h1 className="text-2xl font-bold text-[#E15B2D]">{isEditing ? 'Edit Product' : 'Add New Product'}</h1>
+                        <p className="text-sm text-gray-500">{isEditing ? `Updating details for ${formData.nameEn}` : 'Fill in the details below to add a new product to your inventory'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -345,14 +379,28 @@ export function NewProductForm({ onBack, onSubmit }) {
 
                             <div className="md:col-span-2 space-y-1.5">
                                 <label className="text-sm font-bold text-gray-700">Product Image</label>
-                                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:border-[#E15B2D] hover:bg-orange-50/10 transition-colors cursor-pointer group">
-                                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
-                                        <ImageIcon className="w-8 h-8 text-gray-400 group-hover:text-[#E15B2D]" />
-                                    </div>
-                                    <h3 className="font-bold text-gray-800 mb-1">
-                                        <span className="text-[#E15B2D]">Upload a file</span> or drag and drop
-                                    </h3>
-                                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                                <div
+                                    onClick={triggerFileInput}
+                                    className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:border-[#E15B2D] hover:bg-orange-50/10 transition-colors cursor-pointer group relative overflow-hidden h-64"
+                                >
+                                    {formData.image ? (
+                                        <>
+                                            <img src={formData.image} alt="Preview" className="absolute inset-0 w-full h-full object-contain p-2" />
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <p className="text-white font-bold">Change Image</p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
+                                                <ImageIcon className="w-8 h-8 text-gray-400 group-hover:text-[#E15B2D]" />
+                                            </div>
+                                            <h3 className="font-bold text-gray-800 mb-1">
+                                                <span className="text-[#E15B2D]">Upload a file</span> or drag and drop
+                                            </h3>
+                                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -369,8 +417,8 @@ export function NewProductForm({ onBack, onSubmit }) {
                                 onClick={handleSubmit}
                                 className="px-6 py-2.5 bg-[#E15B2D] text-white font-bold rounded-lg hover:bg-[#d05026] transition-colors flex items-center gap-2 shadow-lg shadow-orange-500/20"
                             >
-                                <Plus className="w-5 h-5" />
-                                Add Product
+                                {isEditing ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                                {isEditing ? 'Save Changes' : 'Add Product'}
                             </button>
                         </div>
                     </div>

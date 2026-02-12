@@ -1,37 +1,81 @@
 const prisma = require('../../utils/prisma');
 
-const getAdminStats = async () => {
-    // 1. Basic Counts & Revenue
+const getAdminStats = async (user) => {
+    const adminId = user.id;
+
+    // 1. Basic Counts & Revenue - filtered by admin
     const [userCount, sellerCount, orderCount, revenue] = await Promise.all([
-        prisma.user.count({ where: { isActive: true } }),
-        prisma.seller.count(),
-        prisma.order.count(),
+        // Count users created by this admin
+        prisma.user.count({
+            where: {
+                isActive: true,
+                createdById: adminId
+            }
+        }),
+        // Count sellers belonging to this admin
+        prisma.seller.count({
+            where: { adminId: adminId }
+        }),
+        // Count orders from sellers belonging to this admin
+        prisma.order.count({
+            where: {
+                seller: { adminId: adminId }
+            }
+        }),
+        // Sum revenue from delivered orders of this admin's sellers
         prisma.order.aggregate({
             _sum: { totalAmount: true },
-            where: { status: 'DELIVERED' }
+            where: {
+                status: 'DELIVERED',
+                seller: { adminId: adminId }
+            }
         })
     ]);
 
-    // 2. Alerts (Low Stock, Failed Deliveries, Pending Orders)
+    // 2. Alerts (Low Stock, Failed Deliveries, Pending Orders) - filtered by admin
     const [lowStock, failedDelivery, pendingOrders] = await Promise.all([
-        prisma.product.count({ where: { stock: { lte: 10 } } }),
-        prisma.order.count({ where: { status: 'DELIVERY_FAILED' } }),
-        prisma.order.count({ where: { status: 'PENDING_REVIEW' } })
+        // Low stock products from this admin's sellers
+        prisma.product.count({
+            where: {
+                stock: { lte: 10 },
+                seller: { adminId: adminId }
+            }
+        }),
+        // Failed deliveries from this admin's sellers
+        prisma.order.count({
+            where: {
+                status: 'DELIVERY_FAILED',
+                seller: { adminId: adminId }
+            }
+        }),
+        // Pending orders from this admin's sellers
+        prisma.order.count({
+            where: {
+                status: 'PENDING_REVIEW',
+                seller: { adminId: adminId }
+            }
+        })
     ]);
     const alertsCount = lowStock + failedDelivery + pendingOrders;
 
-    // 3. System Performance (Delivered vs Total Orders %)
-    const deliveredCount = await prisma.order.count({ where: { status: 'DELIVERED' } });
+    // 3. System Performance (Delivered vs Total Orders %) - filtered by admin
+    const deliveredCount = await prisma.order.count({
+        where: {
+            status: 'DELIVERED',
+            seller: { adminId: adminId }
+        }
+    });
     const performance = orderCount > 0 ? Math.round((deliveredCount / orderCount) * 100) : 0;
 
-    // 4. Weekly Performance Metrics (Last 7 Days Completed Orders)
+    // 4. Weekly Performance Metrics (Last 7 Days Completed Orders) - filtered by admin
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const recentOrders = await prisma.order.findMany({
         where: {
             createdAt: { gte: sevenDaysAgo },
-            status: 'DELIVERED'
+            status: 'DELIVERED',
+            seller: { adminId: adminId }
         },
         select: { createdAt: true }
     });

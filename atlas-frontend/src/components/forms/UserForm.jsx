@@ -13,14 +13,14 @@ import {
 import { Card, CardContent } from '../ui/Card';
 
 const roleScopes = {
-    'Super Admin': ['Admin'],
-    'Admin': [
-        'Seller',
-        'Call Center Agent',
-        'Call Center Manager',
-        'Stock Keeper',
-        'Packaging Agent',
-        'Delivery Agent'
+    'SUPER_ADMIN': ['ADMIN'],
+    'ADMIN': [
+        'SELLER',
+        'CALL_CENTER_AGENT',
+        'CALL_CENTER_MANAGER',
+        'STOCK_KEEPER',
+        'PACKAGING_AGENT',
+        'DELIVERY_AGENT'
     ]
 };
 
@@ -29,35 +29,42 @@ export function UserForm({
     onSubmit,
     currentUserRole = 'Super Admin', // Default to Super Admin if not provided
     title = "Create New User",
-    subtitle = "Add a new user to the system with specific role and permissions"
+    subtitle = "Add a new user to the system with specific role and permissions",
+    initialData = null
 }) {
     const frontIdInputRef = useRef(null);
     const backIdInputRef = useRef(null);
 
-    const availableRoles = roleScopes[currentUserRole] || [];
+    const normalizedRequesterRole = currentUserRole?.toUpperCase().replace(/\s+/g, '_') || 'ADMIN';
+    const availableRoles = roleScopes[normalizedRequesterRole] || [];
+
+    const isEditing = !!initialData;
+    const nameParts = initialData?.name?.split(' ') || ['', ''];
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
 
     const [formData, setFormData] = useState({
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        role: '',
-        shopName: '',
-        storeLink: '',
-        bankName: '',
-        accountHolder: '',
-        accountNumber: '',
-        ibanConfirmation: '',
+        firstName: initialData?.firstName || firstName,
+        lastName: initialData?.lastName || lastName,
+        email: initialData?.email || '',
+        phone: initialData?.phone || '',
+        role: initialData?.role?.name || initialData?.role || '',
+        shopName: initialData?.shopName || initialData?.seller?.shopName || '',
+        storeLink: initialData?.storeLink || '',
+        bankName: initialData?.bankName || '',
+        accountHolder: initialData?.accountHolder || '',
+        accountNumber: initialData?.accountNumber || '',
+        ibanConfirmation: initialData?.ibanConfirmation || '',
         password: '',
         confirmPassword: '',
-        isActive: true,
-        idFrontImage: null,
-        idBackImage: null
+        isActive: initialData?.isActive !== undefined ? initialData.isActive : true,
+        idFrontImage: initialData?.idFrontImage || null,
+        idBackImage: initialData?.idBackImage || null
     });
 
     const [fileNames, setFileNames] = useState({
-        front: 'No file chosen',
-        back: 'No file chosen'
+        front: initialData?.idFrontImage || 'No file chosen',
+        back: initialData?.idBackImage || 'No file chosen'
     });
 
     const handleChange = (e) => {
@@ -80,11 +87,12 @@ export function UserForm({
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (formData.password !== formData.confirmPassword) {
+        if (formData.password && formData.password !== formData.confirmPassword) {
             alert("Passwords don't match!");
             return;
         }
-        onSubmit({
+
+        const submissionData = {
             name: `${formData.firstName} ${formData.lastName}`,
             email: formData.email,
             phone: formData.phone,
@@ -95,11 +103,16 @@ export function UserForm({
             accountHolder: formData.accountHolder,
             accountNumber: formData.accountNumber,
             ibanConfirmation: formData.ibanConfirmation,
-            password: formData.password,
             idFrontImage: formData.idFrontImage,
             idBackImage: formData.idBackImage,
             isActive: formData.isActive
-        });
+        };
+
+        if (formData.password) {
+            submissionData.password = formData.password;
+        }
+
+        onSubmit(submissionData);
     };
 
 
@@ -171,7 +184,9 @@ export function UserForm({
                                 >
                                     <option value="">Select a role</option>
                                     {availableRoles.map(role => (
-                                        <option key={role} value={role}>{role}</option>
+                                        <option key={role} value={role}>
+                                            {role.charAt(0) + role.slice(1).toLowerCase().replace(/_/g, ' ')}
+                                        </option>
                                     ))}
                                 </select>
                                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -283,10 +298,24 @@ export function UserForm({
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <InputField label="Password" name="password" type="password" value={formData.password} onChange={handleChange} required />
+                                <InputField
+                                    label={isEditing ? "New Password (Optional)" : "Password"}
+                                    name="password"
+                                    type="password"
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    required={!isEditing}
+                                />
                                 <p className="text-[10px] text-gray-400">Minimum 8 characters, must contain uppercase, lowercase, and numbers</p>
                             </div>
-                            <InputField label="Confirm Password" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} required />
+                            <InputField
+                                label={isEditing ? "Confirm New Password" : "Confirm Password"}
+                                name="confirmPassword"
+                                type="password"
+                                value={formData.confirmPassword}
+                                onChange={handleChange}
+                                required={formData.password.length > 0}
+                            />
                         </div>
                         <div className="mt-6 flex items-center space-x-3">
                             <div className="flex items-center">
@@ -316,7 +345,7 @@ export function UserForm({
                         type="submit"
                         className="px-8 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-blue-200 shadow-xl hover:bg-blue-700 transition-all active:scale-95"
                     >
-                        Create User
+                        {isEditing ? 'Update User' : 'Create User'}
                     </button>
                 </div>
             </form>

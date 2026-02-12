@@ -4,15 +4,34 @@ const { logAction } = require('../../utils/auditLogger');
 
 // --- Warehouse Operations ---
 
-const createWarehouse = async (warehouseData) => {
-    const { name, location } = warehouseData;
+const createWarehouse = async (warehouseData, user) => {
+    const { name, location, description, status } = warehouseData;
     return await prisma.warehouse.create({
-        data: { name, location }
+        data: {
+            name,
+            location,
+            description,
+            status: status || 'Active',
+            adminId: user.id
+        }
     });
 };
 
-const listWarehouses = async () => {
+const listWarehouses = async (user) => {
+    const { role, id: userId, createdById } = user;
+    let where = {};
+
+    if (role === 'ADMIN') {
+        where = { adminId: userId };
+    } else if (role === 'STOCK_KEEPER') {
+        if (createdById) {
+            where = { adminId: createdById };
+        }
+    }
+    // Super Admin sees all (where = {})
+
     const warehouses = await prisma.warehouse.findMany({
+        where,
         include: {
             inventory: {
                 select: {
@@ -46,7 +65,7 @@ const listWarehouses = async () => {
 // --- Inventory Operations ---
 
 const getInventory = async (user, filters = {}) => {
-    const { role, id: userId, sellerId } = user;
+    const { role, id: userId, sellerId, createdById } = user;
     const { search, category } = filters;
 
     let where = {};
@@ -55,6 +74,11 @@ const getInventory = async (user, filters = {}) => {
         where = { product: { sellerId } };
     } else if (role === 'ADMIN') {
         where = { product: { seller: { adminId: userId } } };
+    } else if (role === 'STOCK_KEEPER') {
+        // Stock Keeper sees inventory from their admin's sellers
+        if (createdById) {
+            where = { product: { seller: { adminId: createdById } } };
+        }
     }
 
     if (search) {
@@ -168,10 +192,10 @@ const getMovementHistory = async (currentUser, filters = {}) => {
 
     // 1. Scoping Logic
     if (role === 'ADMIN') {
-        where.inventory = { product: { adminId: userId } };
+        where.inventory = { product: { seller: { adminId: userId } } };
     } else if (role === 'STOCK_KEEPER') {
         if (createdById) {
-            where.inventory = { product: { adminId: createdById } };
+            where.inventory = { product: { seller: { adminId: createdById } } };
         }
         // If no createdById (global), Stock Keeper sees all allowed movements
     }
@@ -210,7 +234,8 @@ const getMovementHistory = async (currentUser, filters = {}) => {
     });
 };
 
-const getDashboardStats = async (period = 'All Time') => {
+const getDashboardStats = async (user, period = 'All Time') => {
+    const { role, id: userId, createdById } = user;
     const where = {};
     const now = new Date();
 
@@ -223,44 +248,77 @@ const getDashboardStats = async (period = 'All Time') => {
         where.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
     }
 
-    // Note: Since we reverted createdAt in Inventory, we might need to filter StockMovements instead for "new" items
-    // For now, we'll keep the dashboard stats as overall, or filter by movements if period is set
+    // Determine admin ID for filtering
+    let adminId = null;
+    if (role === 'ADMIN') {
+        adminId = userId;
+    } else if (role === 'STOCK_KEEPER' && createdById) {
+        adminId = createdById;
+    }
 
-    const totalProducts = await prisma.product.count();
+    // Build product filter for admin scope
+    const productFilter = adminId ? { seller: { adminId } } : {};
+
+    const totalProducts = await prisma.product.count({
+        where: productFilter
+    });
+
     const totalInventory = await prisma.inventory.aggregate({
-        _sum: { quantity: true }
+        _sum: { quantity: true },
+        where: { product: productFilter }
     });
     const totalPieces = totalInventory._sum.quantity || 0;
 
-    const warehousesCount = await prisma.warehouse.count();
-
-    const outOfStockCount = await prisma.inventory.count({
-        where: { quantity: 0 }
+    const warehousesCount = await prisma.warehouse.count({
+        where: adminId ? { adminId } : {}
     });
 
-    const ordersAwaitingPick = await prisma.packagingTask?.count({
-        where: { status: 'PENDING' }
-    }) || 0;
+    const outOfStockCount = await prisma.inventory.count({
+        where: {
+            quantity: 0,
+            product: productFilter
+        }
+    });
+
+    const lowStockCount = await prisma.inventory.count({
+        where: {
+            quantity: { gt: 0, lte: 10 },
+            product: productFilter
+        }
+    });
+
+    const ordersAwaitingPickFilter = adminId
+        ? { status: 'PACKING', seller: { adminId } }
+        : { status: 'PACKING' };
+
+    const ordersAwaitingPick = await prisma.order.count({
+        where: ordersAwaitingPickFilter
+    });
 
     // For "Stock Status" chart - breakdown by quantity categories
     const inventoryData = await prisma.inventory.findMany({
+        where: { product: productFilter },
         select: { quantity: true }
     });
 
     const stockStatus = {
         totalItems: totalPieces,
         available: inventoryData.filter(i => i.quantity > 0).length,
-        outOfStock: inventoryData.filter(i => i.quantity === 0).length
+        outOfStock: inventoryData.filter(i => i.quantity === 0).length,
+        lowStock: lowStockCount
     };
 
-    // Quantities by Warehouse
+    // Quantities by Warehouse - filtered by admin
     const warehouseStats = await prisma.inventory.groupBy({
         by: ['warehouseId'],
-        _sum: { quantity: true }
+        _sum: { quantity: true },
+        where: { product: productFilter }
     });
 
     // Fetch warehouse names for grouping
-    const warehouses = await prisma.warehouse.findMany();
+    const warehouses = await prisma.warehouse.findMany({
+        where: adminId ? { adminId } : {}
+    });
     const chartData = warehouses.map(w => ({
         name: w.name,
         quantity: warehouseStats.find(s => s.warehouseId === w.id)?._sum.quantity || 0
@@ -273,6 +331,7 @@ const getDashboardStats = async (period = 'All Time') => {
             warehouses: warehousesCount,
             nearExpiry: 0, // No field in schema yet
             outOfStock: outOfStockCount,
+            lowStock: lowStockCount,
             ordersAwaitingPick
         },
         stockStatus,

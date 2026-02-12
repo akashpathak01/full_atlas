@@ -17,7 +17,9 @@ const verifyToken = async (req, res, next) => {
             include: {
                 role: {
                     include: {
-                        permissions: true
+                        permissions: {
+                            include: { permission: true }
+                        }
                     }
                 }
             }
@@ -32,7 +34,7 @@ const verifyToken = async (req, res, next) => {
             id: user.id,
             email: user.email,
             role: user.role?.name,
-            permissions: user.role?.permissions?.map(p => p.code) || []
+            permissions: user.role?.permissions?.map(p => p.permission.code) || []
         };
 
         next();
@@ -41,10 +43,9 @@ const verifyToken = async (req, res, next) => {
     }
 };
 
-const authorizeRoles = (allowedRoles) => {
+const authorizeRoles = (...allowedRoles) => {
     return (req, res, next) => {
-        // Handle array or spread args if necessary, but robust way is expecting array
-        const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+        const roles = allowedRoles.flat();
 
         if (!req.user || !roles.includes(req.user.role)) {
             return res.status(403).json({

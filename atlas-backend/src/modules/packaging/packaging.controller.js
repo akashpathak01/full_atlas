@@ -94,6 +94,15 @@ const getReports = async (req, res) => {
     }
 };
 
+const getMaterialsStats = async (req, res) => {
+    try {
+        const stats = await packagingService.getMaterialsStats(req.user);
+        res.json(stats);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching materials stats', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
@@ -103,5 +112,6 @@ module.exports = {
     createMaterial,
     updateMaterial,
     deleteMaterial,
-    getReports
+    getReports,
+    getMaterialsStats
 };

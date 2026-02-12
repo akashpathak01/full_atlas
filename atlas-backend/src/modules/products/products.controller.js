@@ -17,7 +17,8 @@ const createProduct = async (req, res) => {
             warehouse, // Expecting ID now
             variants,
             status,
-            sellerId
+            sellerId,
+            image
         } = req.body;
 
         const { role, id: userId } = req.user;
@@ -45,6 +46,7 @@ const createProduct = async (req, res) => {
             stock: parseInt(stockQuantity || stock || 0),
             status: status || 'Active',
             productLink: productLink || null,
+            image: image || null,
             variants: variants || [],
             sellerId: sellerId ? parseInt(sellerId) : null,
             adminId: (role === 'ADMIN' || role === 'SUPER_ADMIN') ? userId : null
@@ -149,6 +151,20 @@ const updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
         const { image, warehouse, ...updateData } = req.body; // warehouse separate
+        const { role, id: userId } = req.user;
+
+        // Check if product exists and belongs to admin
+        const productToCheck = await prisma.product.findUnique({
+            where: { id: parseInt(id) },
+            include: { seller: true }
+        });
+
+        if (!productToCheck) return res.status(404).json({ error: 'Product not found' });
+
+        // Admin boundary
+        if (role === 'ADMIN' && productToCheck.adminId !== userId && productToCheck.seller?.adminId !== userId) {
+            return res.status(403).json({ error: 'Forbidden: You do not have permission to update this product' });
+        }
 
         // Convert types if present
         if (updateData.price) updateData.price = parseFloat(updateData.price);
@@ -187,7 +203,10 @@ const updateProduct = async (req, res) => {
 
         const product = await prisma.product.update({
             where: { id: parseInt(id) },
-            data: updateData,
+            data: {
+                ...updateData,
+                image: image !== undefined ? image : undefined
+            },
             include: {
                 seller: {
                     include: {
@@ -203,13 +222,70 @@ const updateProduct = async (req, res) => {
         return res.json(product);
     } catch (error) {
         console.error('Error updating product:', error);
-        return res.status(500).json({ error: 'Failed to update product' });
+        return res.status(500).json({ error: 'Failed to update product', details: error.message });
     }
 };
 
-module.exports = {
-    createProduct,
-    updateProduct
+const getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const product = await prisma.product.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                seller: {
+                    include: {
+                        user: { select: { name: true, email: true, phone: true } }
+                    }
+                },
+                inventory: {
+                    include: { warehouse: true }
+                }
+            }
+        });
+
+        if (!product) return res.status(404).json({ error: 'Product not found' });
+
+        return res.json(product);
+    } catch (error) {
+        console.error('Error fetching product:', error);
+        return res.status(500).json({ error: 'Failed to fetch product' });
+    }
+};
+
+const deleteProduct = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role, id: userId } = req.user;
+
+        const product = await prisma.product.findUnique({
+            where: { id: parseInt(id) },
+            include: { seller: true }
+        });
+
+        if (!product) return res.status(404).json({ error: 'Product not found' });
+
+        // Admin boundary
+        if (role === 'ADMIN' && product.adminId !== userId && product.seller?.adminId !== userId) {
+            return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this product' });
+        }
+
+        // Cleanup associated inventory and movements
+        const inventory = await prisma.inventory.findMany({ where: { productId: parseInt(id) } });
+        for (const item of inventory) {
+            await prisma.stockMovement.deleteMany({ where: { inventoryId: item.id } });
+        }
+        await prisma.inventory.deleteMany({ where: { productId: parseInt(id) } });
+        await prisma.orderItem.deleteMany({ where: { productId: parseInt(id) } });
+
+        await prisma.product.delete({
+            where: { id: parseInt(id) }
+        });
+
+        return res.json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        return res.status(500).json({ error: 'Failed to delete product', details: error.message });
+    }
 };
 
 const getAllProducts = getProducts;
@@ -224,5 +300,7 @@ module.exports = {
     getProducts,
     getAllProducts,
     getActiveProducts,
-    updateProduct
+    getProductById,
+    updateProduct,
+    deleteProduct
 };

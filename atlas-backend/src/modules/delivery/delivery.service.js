@@ -150,6 +150,108 @@ const getDeliveryOrders = async (user) => {
     return orders;
 };
 
+// Admin: Get ALL orders (all statuses) for delivery management
+const getAllOrders = async (user) => {
+    const { role, id: userId } = user;
+
+    if (role !== 'ADMIN') {
+        throw new Error('Only admins can access all orders');
+    }
+
+    // Get all orders from sellers created by this admin
+    const orders = await prisma.order.findMany({
+        where: {
+            seller: { adminId: userId }
+        },
+        include: {
+            customer: true,
+            items: true,
+            seller: {
+                select: {
+                    shopName: true,
+                    user: { select: { name: true } }
+                }
+            },
+            deliveryTask: {
+                include: {
+                    agent: { select: { name: true, email: true } }
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return orders;
+};
+
+// Admin: Get orders with OUT_FOR_DELIVERY status (Pending Delivery Confirmations)
+const getPendingConfirmations = async (user) => {
+    const { role, id: userId } = user;
+
+    if (role !== 'ADMIN') {
+        throw new Error('Only admins can access pending confirmations');
+    }
+
+    const orders = await prisma.order.findMany({
+        where: {
+            status: 'OUT_FOR_DELIVERY',
+            seller: { adminId: userId }
+        },
+        include: {
+            customer: true,
+            items: true,
+            seller: {
+                select: {
+                    shopName: true,
+                    user: { select: { name: true } }
+                }
+            },
+            deliveryTask: {
+                include: {
+                    agent: { select: { name: true, email: true } }
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return orders;
+};
+
+// Admin: Get orders with DELIVERY_FAILED status (Returned Orders)
+const getReturnedOrders = async (user) => {
+    const { role, id: userId } = user;
+
+    if (role !== 'ADMIN') {
+        throw new Error('Only admins can access returned orders');
+    }
+
+    const orders = await prisma.order.findMany({
+        where: {
+            status: 'DELIVERY_FAILED',
+            seller: { adminId: userId }
+        },
+        include: {
+            customer: true,
+            items: true,
+            seller: {
+                select: {
+                    shopName: true,
+                    user: { select: { name: true } }
+                }
+            },
+            deliveryTask: {
+                include: {
+                    agent: { select: { name: true, email: true } }
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return orders;
+};
+
 const getStats = async (user) => {
     const { id: userId, role } = user;
 
@@ -207,12 +309,12 @@ const getStats = async (user) => {
         }
         if (task.order.status === 'DELIVERED') acc[date].delivered++;
         if (task.order.status === 'DELIVERY_FAILED') acc[date].failed++;
-        
+
         if (task.startedAt && task.completedAt) {
             const duration = (new Date(task.completedAt) - new Date(task.startedAt)) / (1000 * 60); // minutes
             acc[date].totalTime += duration;
         }
-        
+
         acc[date].total++;
         return acc;
     }, {});
@@ -224,7 +326,7 @@ const getStats = async (user) => {
             avgTime: day.total > 0 && day.totalTime > 0 ? Math.round(day.totalTime / day.total) : '--'
         }));
 
-    const globalAvgTime = dailyHistory.length > 0 
+    const globalAvgTime = dailyHistory.length > 0
         ? Math.round(dailyHistory.reduce((s, h) => s + (typeof h.avgTime === 'number' ? h.avgTime : 0), 0) / dailyHistory.filter(h => typeof h.avgTime === 'number').length || 0)
         : '--';
 
@@ -246,5 +348,8 @@ module.exports = {
     startDelivery,
     completeDelivery,
     getDeliveryOrders,
+    getAllOrders,
+    getPendingConfirmations,
+    getReturnedOrders,
     getStats
 };

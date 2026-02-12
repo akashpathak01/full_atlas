@@ -25,11 +25,11 @@ const onboardSeller = async (req, res) => {
 const getDashboardStats = async (req, res) => {
     try {
         let sellerId = req.params.sellerId;
-        
+
         if (!sellerId && req.user.role === 'SELLER') {
             sellerId = await sellersService.getSellerIdByUserId(req.user.id);
         }
-        
+
         if (!sellerId) {
             return res.status(400).json({ message: 'Seller ID is required' });
         }
@@ -48,11 +48,11 @@ const getSalesPerformance = async (req, res) => {
     try {
         let sellerId = req.params.sellerId;
         const days = parseInt(req.query.days) || 30;
-        
+
         if (!sellerId && req.user.role === 'SELLER') {
             sellerId = await sellersService.getSellerIdByUserId(req.user.id);
         }
-        
+
         if (!sellerId) {
             return res.status(400).json({ message: 'Seller ID is required' });
         }
@@ -71,11 +71,11 @@ const getTopProducts = async (req, res) => {
     try {
         let sellerId = req.params.sellerId;
         const limit = parseInt(req.query.limit) || 5;
-        
+
         if (!sellerId && req.user.role === 'SELLER') {
             sellerId = await sellersService.getSellerIdByUserId(req.user.id);
         }
-        
+
         if (!sellerId) {
             return res.status(400).json({ message: 'Seller ID is required' });
         }
@@ -94,11 +94,11 @@ const getRecentOrders = async (req, res) => {
     try {
         let sellerId = req.params.sellerId;
         const limit = parseInt(req.query.limit) || 10;
-        
+
         if (!sellerId && req.user.role === 'SELLER') {
             sellerId = await sellersService.getSellerIdByUserId(req.user.id);
         }
-        
+
         if (!sellerId) {
             return res.status(400).json({ message: 'Seller ID is required' });
         }
@@ -117,11 +117,11 @@ const getLowStockAlerts = async (req, res) => {
     try {
         let sellerId = req.params.sellerId;
         const threshold = parseInt(req.query.threshold) || 10;
-        
+
         if (!sellerId && req.user.role === 'SELLER') {
             sellerId = await sellersService.getSellerIdByUserId(req.user.id);
         }
-        
+
         if (!sellerId) {
             return res.status(400).json({ message: 'Seller ID is required' });
         }
@@ -133,9 +133,29 @@ const getLowStockAlerts = async (req, res) => {
     }
 };
 
+const getSeller = async (req, res) => {
+    try {
+        const seller = await sellersService.getSellerDetails(req.params.sellerId, req.user);
+        res.json(seller);
+    } catch (error) {
+        res.status(404).json({ message: 'Seller not found', error: error.message });
+    }
+};
+
+const deleteSeller = async (req, res) => {
+    try {
+        const result = await sellersService.deleteSeller(req.params.sellerId, req.user);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting seller', error: error.message });
+    }
+};
+
 module.exports = {
     listSellers,
     onboardSeller,
+    getSeller,
+    deleteSeller,
     getDashboardStats,
     getSalesPerformance,
     getTopProducts,

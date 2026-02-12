@@ -5,7 +5,7 @@ import {
     Box, Activity, CheckCircle, AlertCircle
 } from 'lucide-react';
 
-export function ProductsList({ products = [], onAddProduct }) {
+export function ProductsList({ products = [], onAddProduct, onEdit, onDelete, onView }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedWarehouse, setSelectedWarehouse] = useState('All Warehouses');
     const [statusFilter, setStatusFilter] = useState('All Status');
@@ -13,6 +13,7 @@ export function ProductsList({ products = [], onAddProduct }) {
     // Filter logic placeholder - effectively just passing through empty array for now or filtering provided products
     const filteredProducts = products.filter(product => {
         const matchesSearch = product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             product.code?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesWarehouse = selectedWarehouse === 'All Warehouses' || product.warehouse === selectedWarehouse;
         const matchesStatus = statusFilter === 'All Status' || product.status === statusFilter;
@@ -189,7 +190,7 @@ export function ProductsList({ products = [], onAddProduct }) {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="p-4 font-mono text-xs text-gray-600 font-medium bg-gray-50/50 rounded-sm">{product.code}</td>
+                                        <td className="p-4 font-mono text-xs text-gray-600 font-medium bg-gray-50/50 rounded-sm">{product.sku || product.code}</td>
                                         <td className="p-4 font-bold text-gray-900">{product.price} AED</td>
                                         <td className="p-4 font-medium">{product.stock}</td>
                                         <td className="p-4">
@@ -211,10 +212,25 @@ export function ProductsList({ products = [], onAddProduct }) {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-2">
-                                                <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                                <button
+                                                    onClick={() => onView && onView(product)}
+                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="View"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => onEdit && onEdit(product)}
+                                                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                    title="Edit"
+                                                >
                                                     <Edit className="w-4 h-4" />
                                                 </button>
-                                                <button className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                                <button
+                                                    onClick={() => onDelete && onDelete(product)}
+                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Delete"
+                                                >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>

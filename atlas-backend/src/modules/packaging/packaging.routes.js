@@ -11,6 +11,7 @@ router.patch('/tasks/:id/complete', verifyToken, authorizeRoles('PACKAGING_AGENT
 router.get('/reports', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.getReports);
 
 // Materials Routes
+router.get('/materials/stats', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.getMaterialsStats);
 router.get('/materials', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.listMaterials);
 router.post('/materials', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.createMaterial);
 router.patch('/materials/:id', verifyToken, authorizeRoles('ADMIN', 'PACKAGING_AGENT'), packagingController.updateMaterial);

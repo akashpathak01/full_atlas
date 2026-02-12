@@ -5,7 +5,7 @@ const prisma = require('../../utils/prisma');
 
 const createWarehouse = async (req, res) => {
     try {
-        const warehouse = await inventoryService.createWarehouse(req.body);
+        const warehouse = await inventoryService.createWarehouse(req.body, req.user);
         res.status(201).json(warehouse);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -14,7 +14,7 @@ const createWarehouse = async (req, res) => {
 
 const listWarehouses = async (req, res) => {
     try {
-        const warehouses = await inventoryService.listWarehouses();
+        const warehouses = await inventoryService.listWarehouses(req.user);
         res.json(warehouses);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -86,7 +86,7 @@ const updateStock = async (req, res) => {
 const getDashboardStats = async (req, res) => {
     try {
         const { period } = req.query;
-        const stats = await inventoryService.getDashboardStats(period);
+        const stats = await inventoryService.getDashboardStats(req.user, period);
         res.json(stats);
     } catch (error) {
         console.error('Error fetching inventory dashboard stats:', error);

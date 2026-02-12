@@ -6,6 +6,38 @@ import { useNavigate } from 'react-router-dom';
 
 export function AdminInventoryPage() {
     const navigate = useNavigate();
+    const [stats, setStats] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const response = await fetch('http://localhost:5000/api/inventory/dashboard', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setStats(data.stats);
+                }
+            } catch (error) {
+                console.error('Error fetching inventory stats:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -45,7 +77,7 @@ export function AdminInventoryPage() {
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <p className="text-sm text-gray-500 font-medium">Total Products</p>
-                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{adminInventoryStats.totalItems}</h3>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalProducts || 0}</h3>
                         </div>
                         <div className="p-3 bg-blue-50 rounded-xl">
                             <Package className="w-6 h-6 text-blue-600" />
@@ -60,13 +92,13 @@ export function AdminInventoryPage() {
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <p className="text-sm text-gray-500 font-medium">Low Stock Items</p>
-                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{adminInventoryStats.lowStock}</h3>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{stats?.lowStock || 0}</h3>
                         </div>
                         <div className="p-3 bg-red-50 rounded-xl">
                             <AlertTriangle className="w-6 h-6 text-red-600" />
                         </div>
                     </div>
-                    <button className="text-red-600 text-sm font-medium hover:text-red-700 flex items-center">
+                    <button onClick={() => navigate('/admin/products')} className="text-red-600 text-sm font-medium hover:text-red-700 flex items-center">
                         View details <ArrowRight className="w-4 h-4 ml-1" />
                     </button>
                 </div>
@@ -75,7 +107,7 @@ export function AdminInventoryPage() {
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <p className="text-sm text-gray-500 font-medium">Warehouses</p>
-                            <h3 className="text-3xl font-bold text-gray-900 mt-2">4</h3>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{stats?.warehouses || 0}</h3>
                         </div>
                         <div className="p-3 bg-purple-50 rounded-xl">
                             <Warehouse className="w-6 h-6 text-purple-600" />

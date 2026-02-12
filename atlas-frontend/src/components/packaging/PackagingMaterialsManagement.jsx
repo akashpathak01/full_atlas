@@ -2,9 +2,43 @@
 import React from 'react';
 import { Package, AlertTriangle, DollarSign, CheckCircle, Plus, FileText, LayoutGrid, ArrowLeft, Home } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../lib/api';
 
 export function PackagingMaterialsManagement() {
     const navigate = useNavigate();
+    const [stats, setStats] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+
+    const fetchStats = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/packaging/materials/stats');
+            setStats(response.data);
+        } catch (error) {
+            console.error('Failed to fetch materials stats:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    React.useEffect(() => {
+        fetchStats();
+    }, []);
+
+    const formatCurrency = (val) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+        }).format(val || 0);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -31,7 +65,7 @@ export function PackagingMaterialsManagement() {
                         <Package className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
-                        <span className="text-2xl font-black text-gray-900 leading-none">0</span>
+                        <span className="text-2xl font-black text-gray-900 leading-none">{stats?.totalMaterials || 0}</span>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Total Materials</p>
                     </div>
                 </div>
@@ -41,7 +75,7 @@ export function PackagingMaterialsManagement() {
                         <AlertTriangle className="w-6 h-6 text-yellow-600" />
                     </div>
                     <div>
-                        <span className="text-2xl font-black text-gray-900 leading-none">0</span>
+                        <span className="text-2xl font-black text-gray-900 leading-none">{stats?.lowStockCount || 0}</span>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Low Stock Alerts</p>
                     </div>
                 </div>
@@ -51,7 +85,7 @@ export function PackagingMaterialsManagement() {
                         <DollarSign className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                        <span className="text-2xl font-black text-gray-900 leading-none">$0.00</span>
+                        <span className="text-2xl font-black text-gray-900 leading-none">{formatCurrency(stats?.totalValue)}</span>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Total Inventory Value</p>
                     </div>
                 </div>
@@ -62,26 +96,52 @@ export function PackagingMaterialsManagement() {
                 <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[300px]">
                     <div className="flex justify-between items-center mb-10">
                         <h3 className="text-lg font-black text-gray-800 tracking-tight">Low Stock Alerts</h3>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100">0 items</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100">{stats?.lowStockCount || 0} items</span>
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-6 ring-8 ring-green-50/50">
-                            <CheckCircle className="w-8 h-8 text-green-500" />
-                        </div>
-                        <p className="text-gray-400 text-sm font-bold italic tracking-tight">No low stock alerts at the moment.</p>
+                        {stats?.lowStockItems?.length > 0 ? (
+                            <div className="w-full divide-y divide-gray-50">
+                                {stats.lowStockItems.map(item => (
+                                    <div key={item.id} className="py-3 flex justify-between items-center">
+                                        <span className="font-bold text-gray-700">{item.name}</span>
+                                        <span className="text-sm font-black text-orange-500">{item.stock} left</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-6 ring-8 ring-green-50/50">
+                                    <CheckCircle className="w-8 h-8 text-green-500" />
+                                </div>
+                                <p className="text-gray-400 text-sm font-bold italic tracking-tight">No low stock alerts at the moment.</p>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[300px]">
                     <div className="flex justify-between items-center mb-10">
                         <h3 className="text-lg font-black text-gray-800 tracking-tight">Out of Stock</h3>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100">0 items</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100">{stats?.outOfStockCount || 0} items</span>
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-6 ring-8 ring-green-50/50">
-                            <CheckCircle className="w-8 h-8 text-green-500" />
-                        </div>
-                        <p className="text-gray-400 text-sm font-bold italic tracking-tight">All materials are in stock.</p>
+                        {stats?.outOfStockItems?.length > 0 ? (
+                            <div className="w-full divide-y divide-gray-50">
+                                {stats.outOfStockItems.map(item => (
+                                    <div key={item.id} className="py-3 flex justify-between items-center">
+                                        <span className="font-bold text-gray-700">{item.name}</span>
+                                        <span className="text-sm font-black text-red-500">Out of Stock</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-6 ring-8 ring-green-50/50">
+                                    <CheckCircle className="w-8 h-8 text-green-500" />
+                                </div>
+                                <p className="text-gray-400 text-sm font-bold italic tracking-tight">All materials are in stock.</p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

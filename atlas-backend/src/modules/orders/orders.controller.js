@@ -286,7 +286,7 @@ const updateOrderStatus = async (req, res) => {
             } else if (nextStatus === 'PACKED') {
                 await tx.packagingTask.update({
                     where: { orderId: ord.id },
-                    data: { 
+                    data: {
                         completedAt: new Date(),
                         weight: req.body.weight ? parseFloat(req.body.weight) : undefined,
                         qualityCheck: req.body.qualityCheck || undefined,
@@ -348,7 +348,7 @@ const getPackagingOrders = async (req, res) => {
                     where: { id: userId },
                     select: { createdById: true }
                 });
-                
+
                 if (user?.createdById) {
                     adminId = user.createdById;
                 } else {
@@ -358,8 +358,10 @@ const getPackagingOrders = async (req, res) => {
             }
 
             // Base where clause
+            // Admin only needs to see orders ready for packaging (CONFIRMED)
+            // or those still in packaging. Packed orders should move to delivery.
             where = {
-                status: { in: ['CONFIRMED', 'IN_PACKAGING', 'PACKED', 'Pending'] } // Added 'Pending' if that's what's in DB
+                status: { in: ['CONFIRMED', 'IN_PACKAGING'] }
             };
 
             // Apply admin scoping if NOT global
@@ -371,7 +373,7 @@ const getPackagingOrders = async (req, res) => {
         } else if (role === 'SUPER_ADMIN') {
             // Super Admin sees everything
             where = {
-                status: { in: ['CONFIRMED', 'IN_PACKAGING', 'PACKED'] }
+                status: { in: ['CONFIRMED', 'IN_PACKAGING'] }
             };
         } else if (role === 'PACKAGING_AGENT') {
             // Fetch the agent to get their admin (createdById)

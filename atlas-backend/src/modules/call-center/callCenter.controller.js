@@ -2,7 +2,7 @@ const callCenterService = require('./callCenter.service');
 
 const getCustomers = async (req, res) => {
     try {
-        const customers = await callCenterService.getCustomers();
+        const customers = await callCenterService.getCustomers(req.user);
         res.json(customers);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -40,6 +40,19 @@ const updateStatus = async (req, res) => {
     }
 };
 
+const confirmOrder = async (req, res) => {
+    try {
+        const order = await callCenterService.confirmOrder(req.params.id, req.user);
+        res.json({
+            message: 'Order confirmed successfully',
+            order
+        });
+    } catch (error) {
+        const statusCode = error.message.includes('not found') ? 404 : 400;
+        res.status(statusCode).json({ message: error.message });
+    }
+};
+
 const addNote = async (req, res) => {
     const { content } = req.body;
     if (!content) return res.status(400).json({ message: 'Note content is required' });
@@ -64,7 +77,7 @@ const getNotes = async (req, res) => {
 
 const getAgents = async (req, res) => {
     try {
-        const agents = await callCenterService.getAgents();
+        const agents = await callCenterService.getAgents(req.user);
         res.json(agents);
     } catch (error) {
         res.status(500).json({ message: 'Internal server error' });
@@ -82,7 +95,7 @@ const getPerformance = async (req, res) => {
 
 const getDashboardStats = async (req, res) => {
     try {
-        const stats = await callCenterService.getDashboardStats();
+        const stats = await callCenterService.getDashboardStats(req.user);
         res.json(stats);
     } catch (error) {
         console.error('Dashboard Stats Error:', error);
@@ -92,7 +105,7 @@ const getDashboardStats = async (req, res) => {
 
 const autoAssign = async (req, res) => {
     try {
-        const result = await callCenterService.autoAssignOrders();
+        const result = await callCenterService.autoAssignOrders(req.user);
         res.json(result);
     } catch (error) {
         res.status(500).json({ message: 'Error assigning orders', error: error.message });
@@ -101,7 +114,7 @@ const autoAssign = async (req, res) => {
 
 const fixUnassigned = async (req, res) => {
     try {
-        const result = await callCenterService.fixUnassignedOrders();
+        const result = await callCenterService.fixUnassignedOrders(req.user);
         res.json(result);
     } catch (error) {
         res.status(500).json({ message: 'Error fixing unassigned orders', error: error.message });
@@ -120,7 +133,7 @@ const createTestOrders = async (req, res) => {
 const getManagerOrders = async (req, res) => {
     try {
         const { page, limit, search, status, agentId } = req.query;
-        const orders = await callCenterService.getManagerOrders({ page, limit, search, status, agentId });
+        const orders = await callCenterService.getManagerOrders({ page, limit, search, status, agentId }, req.user);
         res.json(orders);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching manager orders', error: error.message });
@@ -129,7 +142,7 @@ const getManagerOrders = async (req, res) => {
 
 const getManagerOrderStats = async (req, res) => {
     try {
-        const stats = await callCenterService.getManagerOrderStats();
+        const stats = await callCenterService.getManagerOrderStats(req.user);
         res.json(stats);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching manager order stats', error: error.message });
@@ -156,7 +169,7 @@ const updateAgent = async (req, res) => {
 
 const getPerformanceReports = async (req, res) => {
     try {
-        const reports = await callCenterService.getPerformanceReports();
+        const reports = await callCenterService.getPerformanceReports(req.user);
         res.json(reports);
     } catch (error) {
         console.error('Error in getPerformanceReports controller:', error);
@@ -166,7 +179,7 @@ const getPerformanceReports = async (req, res) => {
 
 const getOrderStatistics = async (req, res) => {
     try {
-        const stats = await callCenterService.getOrderStatistics();
+        const stats = await callCenterService.getOrderStatistics(req.user);
         res.json(stats);
     } catch (error) {
         console.error('Error in getOrderStatistics controller:', error);
@@ -176,7 +189,7 @@ const getOrderStatistics = async (req, res) => {
 
 const createAgent = async (req, res) => {
     try {
-        const newAgent = await callCenterService.createAgent(req.body);
+        const newAgent = await callCenterService.createAgent(req.body, req.user);
         res.status(201).json(newAgent);
     } catch (error) {
         console.error('Error creating agent:', error);
@@ -199,6 +212,7 @@ module.exports = {
     getCustomerById,
     getOrders,
     updateStatus,
+    confirmOrder,
     addNote,
     getNotes,
     getAgents,

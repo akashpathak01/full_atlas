@@ -1,7 +1,25 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ScanLine, Search, Filter } from 'lucide-react';
+import api from '../../lib/api';
 
 export function DeliveryAllOrders({ onNavigate }) {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchOrders = async () => {
+            try {
+                const response = await api.get('/delivery/orders/all');
+                setOrders(response.data);
+            } catch (error) {
+                console.error('Error fetching all orders:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchOrders();
+    }, []);
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -32,75 +50,10 @@ export function DeliveryAllOrders({ onNavigate }) {
                 </button>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-                <h3 className="font-bold text-gray-900">Search Filters</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option>All Statuses</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Shipping Company</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option>All Companies</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Location</label>
-                        <input type="text" placeholder="City/Emirate/Area" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Seller</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option>All Sellers</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Min Price</label>
-                        <input type="text" placeholder="AED" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Max Price</label>
-                        <input type="text" placeholder="AED" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Min Quantity</label>
-                        <input type="text" placeholder="Quantity" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Max Quantity</label>
-                        <input type="text" placeholder="Quantity" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Order Type</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option>All Types</option>
-                        </select>
-                    </div>
-                    <div className="md:col-span-3">
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Search</label>
-                        <input type="text" placeholder="Order Code/Customer/Phone" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                </div>
-                <div className="flex gap-2">
-                    <button className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2">
-                        <Search className="w-4 h-4" /> Search
-                    </button>
-                    <button className="px-6 py-2 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 flex items-center gap-2">
-                        <Filter className="w-4 h-4" /> Reset
-                    </button>
-                </div>
-            </div>
-
             {/* Orders Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
-                    <h3 className="font-bold text-gray-900">Orders</h3>
+                    <h3 className="font-bold text-gray-900">Orders ({orders.length})</h3>
                 </div>
                 <div className="overflow-x-auto min-h-[200px]">
                     <table className="w-full text-sm text-left">
@@ -110,30 +63,52 @@ export function DeliveryAllOrders({ onNavigate }) {
                                 <th className="px-4 py-3">Customer</th>
                                 <th className="px-4 py-3">Phone</th>
                                 <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3">Workflow</th>
                                 <th className="px-4 py-3">Price</th>
                                 <th className="px-4 py-3">Qty</th>
-                                <th className="px-4 py-3">Products</th>
                                 <th className="px-4 py-3">Seller</th>
                                 <th className="px-4 py-3">Location</th>
-                                <th className="px-4 py-3">Shipping Co.</th>
                                 <th className="px-4 py-3">Date</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colSpan="12" className="px-6 py-12 text-center text-gray-500">
-                                    No orders found
-                                </td>
-                            </tr>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
+                                        Loading orders...
+                                    </td>
+                                </tr>
+                            ) : orders.length === 0 ? (
+                                <tr>
+                                    <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
+                                        No orders found
+                                    </td>
+                                </tr>
+                            ) : (
+                                orders.map((order) => (
+                                    <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-medium text-blue-600">{order.orderNumber}</td>
+                                        <td className="px-4 py-3">{order.customerName}</td>
+                                        <td className="px-4 py-3">{order.customerPhone}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded text-xs font-medium ${order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+                                                    order.status === 'OUT_FOR_DELIVERY' ? 'bg-blue-100 text-blue-800' :
+                                                        order.status === 'PACKED' ? 'bg-yellow-100 text-yellow-800' :
+                                                            order.status === 'DELIVERY_FAILED' ? 'bg-red-100 text-red-800' :
+                                                                'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                {order.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">{order.totalAmount} AED</td>
+                                        <td className="px-4 py-3">{order.items?.length || 0}</td>
+                                        <td className="px-4 py-3">{order.seller?.shopName || 'N/A'}</td>
+                                        <td className="px-4 py-3 text-xs">{order.shippingAddress?.substring(0, 30)}...</td>
+                                        <td className="px-4 py-3 text-xs">{new Date(order.createdAt).toLocaleDateString()}</td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
-                </div>
-                {/* Pagination Placeholder */}
-                <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center">
-                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden max-w-md">
-                        <div className="h-full bg-gray-300 w-1/3"></div>
-                    </div>
                 </div>
             </div>
         </div>

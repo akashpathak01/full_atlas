@@ -2,8 +2,39 @@ const prisma = require('../../utils/prisma');
 const { logAction } = require('../../utils/auditLogger');
 const bcrypt = require('bcryptjs');
 
-const getCustomers = async () => {
+const getAdminId = async (user) => {
+    const { role, id: userId, createdById } = user;
+    const userRole = role?.name || role;
+
+    if (userRole === 'ADMIN') return userId;
+    if (createdById) return createdById;
+
+    // Fallback: Fetch from DB if not in token (for existing sessions)
+    const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { createdById: true }
+    });
+    return dbUser?.createdById || null;
+};
+
+const getCustomers = async (user = {}) => {
+    const { role, id: userId } = user;
+    const where = {};
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        where.orders = {
+            some: {
+                seller: { adminId: adminId }
+            }
+        };
+    } else {
+        // If no adminId found, ensure no data is leaked
+        where.id = -1;
+    }
+
     const customers = await prisma.customer.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         include: {
             _count: {
@@ -31,11 +62,20 @@ const getCustomerById = async (id) => {
 
 const getOrders = async (filters = {}, user = {}) => {
     const where = {};
-    
-    // If user is an agent, restrict to their assigned orders
+
     const userRole = user.role?.name || user.role;
-    if (userRole === 'CALL_CENTER_AGENT') {
-        where.callCenterAgentId = user.id;
+    const adminId = await getAdminId(user);
+
+    if (['CALL_CENTER_AGENT', 'CALL_CENTER_MANAGER'].includes(userRole)) {
+        if (!filters.status) {
+            where.status = 'PENDING_REVIEW';
+        }
+        where.seller = { adminId: adminId };
+    } else if (userRole === 'ADMIN') {
+        where.seller = { adminId: adminId };
+    } else {
+        // Fallback for other roles if needed
+        where.seller = { adminId: adminId || -1 };
     }
 
     if (filters.status) {
@@ -62,12 +102,49 @@ const updateOrderStatus = async (orderId, status, user) => {
         data: { status }
     });
 
+
     await logAction({
         actionType: 'ORDER_STATUS_UPDATE',
         entityType: 'ORDER',
         entityId: parseInt(orderId),
         user,
         metadata: { status }
+    });
+
+    return updatedOrder;
+};
+
+const confirmOrder = async (orderId, user) => {
+    // 1. Verify order exists and is in PENDING_REVIEW status
+    const order = await prisma.order.findUnique({
+        where: { id: parseInt(orderId) }
+    });
+
+    if (!order) {
+        throw new Error('Order not found');
+    }
+
+    if (order.status !== 'PENDING_REVIEW') {
+        throw new Error(`Order cannot be confirmed. Current status: ${order.status}`);
+    }
+
+    // 2. Update order status to CONFIRMED
+    const updatedOrder = await prisma.order.update({
+        where: { id: parseInt(orderId) },
+        data: { status: 'CONFIRMED' }
+    });
+
+    // 3. Log the confirmation action
+    await logAction({
+        actionType: 'ORDER_CONFIRMED',
+        entityType: 'ORDER',
+        entityId: parseInt(orderId),
+        user,
+        metadata: {
+            previousStatus: 'PENDING_REVIEW',
+            newStatus: 'CONFIRMED',
+            confirmedBy: user.name || user.email
+        }
     });
 
     return updatedOrder;
@@ -91,9 +168,19 @@ const getCallNotes = async (orderId) => {
     });
 };
 
-const getAgents = async () => {
+const getAgents = async (user = {}) => {
+    const { role, id: userId } = user;
+    const where = { role: { name: 'CALL_CENTER_AGENT' } };
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        where.createdById = adminId;
+    } else {
+        where.id = -1;
+    }
+
     const agents = await prisma.user.findMany({
-        where: { role: { name: 'CALL_CENTER_AGENT' } },
+        where,
         include: {
             assignedOrders: {
                 select: {
@@ -111,7 +198,7 @@ const getAgents = async () => {
         const pending = agent.assignedOrders.filter(o => o.status === 'PENDING_REVIEW' || o.status === 'IN_PROGRESS').length;
         // Simple success rate calculation
         const successRate = totalOrders > 0 ? Math.round((completed / totalOrders) * 100) : 0;
-        
+
         // Find most recent order for activity proxy
         const lastOrder = agent.assignedOrders.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
         const lastActive = lastOrder ? lastOrder.updatedAt : agent.updatedAt;
@@ -158,21 +245,34 @@ const getPerformanceMetrics = async () => {
     };
 };
 
-const getDashboardStats = async () => {
+const getDashboardStats = async (user = {}) => {
+    const { role, id: userId } = user;
+    let orderWhere = {};
+    let agentWhere = { role: { name: 'CALL_CENTER_AGENT' }, isActive: true };
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        orderWhere = { seller: { adminId: adminId } };
+        agentWhere.createdById = adminId;
+    } else {
+        orderWhere = { id: -1 };
+        agentWhere.id = -1;
+    }
+
     // 1. Total Orders
-    const totalOrders = await prisma.order.count();
+    const totalOrders = await prisma.order.count({ where: orderWhere });
 
     // 2. Pending Approval (PENDING_REVIEW status)
     const pendingApproval = await prisma.order.count({
-        where: { status: 'PENDING_REVIEW' }
+        where: {
+            status: 'PENDING_REVIEW',
+            ...orderWhere
+        }
     });
 
     // 3. Active Agents
     const activeAgents = await prisma.user.count({
-        where: {
-            role: { name: 'CALL_CENTER_AGENT' },
-            isActive: true
-        }
+        where: agentWhere
     });
 
     // 4. Approved Today (Status CONFIRMED, updated today)
@@ -182,13 +282,17 @@ const getDashboardStats = async () => {
     const approvedToday = await prisma.order.count({
         where: {
             status: 'CONFIRMED',
-            updatedAt: { gte: startOfDay }
+            updatedAt: { gte: startOfDay },
+            ...orderWhere
         }
     });
 
     // 5. Orders Awaiting Approval (List)
     const awaitingApprovalOrders = await prisma.order.findMany({
-        where: { status: 'PENDING_REVIEW' },
+        where: {
+            status: 'PENDING_REVIEW',
+            ...orderWhere
+        },
         take: 5,
         orderBy: { createdAt: 'asc' },
         include: { customer: true }
@@ -196,7 +300,10 @@ const getDashboardStats = async () => {
 
     // 6. Recently Approved (List)
     const recentlyApproved = await prisma.order.findMany({
-        where: { status: 'CONFIRMED' },
+        where: {
+            status: 'CONFIRMED',
+            ...orderWhere
+        },
         take: 5,
         orderBy: { updatedAt: 'desc' },
         include: { customer: true }
@@ -204,9 +311,10 @@ const getDashboardStats = async () => {
 
     // 7. Assigned Orders (Pending Review + Has Agent)
     const assignedOrders = await prisma.order.findMany({
-         where: {
+        where: {
             status: 'PENDING_REVIEW',
-            callCenterAgentId: { not: null }
+            callCenterAgentId: { not: null },
+            ...orderWhere
         },
         take: 10,
         orderBy: { createdAt: 'desc' },
@@ -220,7 +328,8 @@ const getDashboardStats = async () => {
     const unassignedOrders = await prisma.order.findMany({
         where: {
             status: 'PENDING_REVIEW',
-            callCenterAgentId: null
+            callCenterAgentId: null,
+            ...orderWhere
         },
         take: 10,
         orderBy: { createdAt: 'desc' },
@@ -262,12 +371,15 @@ const getDashboardStats = async () => {
     };
 };
 
-const autoAssignOrders = async () => {
-    // 1. Get all unassigned orders (PENDING_REVIEW)
+const autoAssignOrders = async (user = {}) => {
+    const adminId = await getAdminId(user);
+
+    // 1. Get all unassigned orders (PENDING_REVIEW) scoped by admin
     const unassignedOrders = await prisma.order.findMany({
         where: {
             status: 'PENDING_REVIEW',
-            callCenterAgentId: null
+            callCenterAgentId: null,
+            seller: { adminId: adminId || -1 }
         },
         orderBy: { createdAt: 'asc' }
     });
@@ -275,11 +387,17 @@ const autoAssignOrders = async () => {
     if (unassignedOrders.length === 0) return { assigned: 0, message: 'No unassigned orders found' };
 
     // 2. Get all active agents
+    let agentWhere = {
+        role: { name: 'CALL_CENTER_AGENT' },
+        isActive: true
+    };
+
+    if (adminId) {
+        agentWhere.createdById = adminId;
+    }
+
     const agents = await prisma.user.findMany({
-        where: {
-            role: { name: 'CALL_CENTER_AGENT' },
-            isActive: true
-        }
+        where: agentWhere
     });
 
     if (agents.length === 0) return { assigned: 0, message: 'No active agents found' };
@@ -298,10 +416,10 @@ const autoAssignOrders = async () => {
     return { assigned: assignedCount, message: `Successfully assigned ${assignedCount} orders to ${agents.length} agents` };
 };
 
-const fixUnassignedOrders = async () => {
+const fixUnassignedOrders = async (user = {}) => {
     // Logic to fix unassigned orders - effectively same as auto-assign for now, 
     // but could include more complex re-balancing logic in future.
-    return await autoAssignOrders();
+    return await autoAssignOrders(user);
 };
 
 const createTestOrders = async () => {
@@ -309,10 +427,10 @@ const createTestOrders = async () => {
     const dummyOrders = [];
     for (let i = 0; i < 5; i++) {
         const orderNumber = `TEST-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-         // Ideally needs a valid sellerId, let's try to find one or default to 1 (risky if seeded differently)
-         // Better to find first seller
-         const seller = await prisma.seller.findFirst();
-         if (!seller) throw new Error("No seller found to create test orders");
+        // Ideally needs a valid sellerId, let's try to find one or default to 1 (risky if seeded differently)
+        // Better to find first seller
+        const seller = await prisma.seller.findFirst();
+        if (!seller) throw new Error("No seller found to create test orders");
 
         const order = await prisma.order.create({
             data: {
@@ -328,8 +446,16 @@ const createTestOrders = async () => {
     return { created: dummyOrders.length, message: "Created 5 test orders" };
 };
 
-const getManagerOrders = async ({ page = 1, limit = 50, search = '', status = '', agentId = '' }) => {
+const getManagerOrders = async ({ page = 1, limit = 50, search = '', status = '', agentId = '' }, user = {}) => {
     const where = {};
+    const { role, id: userId } = user;
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        where.seller = { adminId: adminId };
+    } else {
+        where.id = -1;
+    }
 
     if (status && status !== 'All Statuses') {
         // Map frontend status to backend status if needed, or assume exact match
@@ -371,22 +497,35 @@ const getManagerOrders = async ({ page = 1, limit = 50, search = '', status = ''
     return orders;
 };
 
-const getManagerOrderStats = async () => {
+const getManagerOrderStats = async (user = {}) => {
+    const { role, id: userId } = user;
+    let orderWhere = {};
+    let agentWhere = { role: { name: 'CALL_CENTER_AGENT' }, isActive: true };
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        orderWhere = { seller: { adminId: adminId } };
+        agentWhere.createdById = adminId;
+    } else {
+        orderWhere = { id: -1 };
+        agentWhere.id = -1;
+    }
+
     // 1. Total Orders
-    const totalOrders = await prisma.order.count();
+    const totalOrders = await prisma.order.count({ where: orderWhere });
 
     // 2. Pending (PENDING_REVIEW)
-    const pending = await prisma.order.count({ where: { status: 'PENDING_REVIEW' } });
+    const pending = await prisma.order.count({ where: { status: 'PENDING_REVIEW', ...orderWhere } });
 
     // 3. Processing (IN_PROGRESS or CONFIRMED but not delivered? Let's use IN_PROGRESS)
-    const processing = await prisma.order.count({ where: { status: 'IN_PROGRESS' } });
+    const processing = await prisma.order.count({ where: { status: 'IN_PROGRESS', ...orderWhere } });
 
     // 4. Completed (DELIVERED or COMPLETED)
-    const completed = await prisma.order.count({ where: { status: 'COMPLETED' } });
+    const completed = await prisma.order.count({ where: { status: 'COMPLETED', ...orderWhere } });
 
     // 5. Active Agents
     const activeAgents = await prisma.user.count({
-        where: { role: { name: 'CALL_CENTER_AGENT' }, isActive: true }
+        where: agentWhere
     });
 
     // 6. Today's Revenue (Sum of totalAmount for orders created today)
@@ -394,7 +533,10 @@ const getManagerOrderStats = async () => {
     startOfDay.setHours(0, 0, 0, 0);
     const revenueAgg = await prisma.order.aggregate({
         _sum: { totalAmount: true },
-        where: { createdAt: { gte: startOfDay } }
+        where: {
+            createdAt: { gte: startOfDay },
+            ...orderWhere
+        }
     });
 
     return {
@@ -412,7 +554,7 @@ const updateManagerOrder = async (id, data, user) => {
     const updateData = {};
 
     if (status) {
-         // rough mapping back to DB status
+        // rough mapping back to DB status
         if (status === 'Pending') updateData.status = 'PENDING_REVIEW';
         else if (status === 'Processing') updateData.status = 'IN_PROGRESS';
         else if (status === 'Completed') updateData.status = 'COMPLETED';
@@ -442,9 +584,22 @@ const updateManagerOrder = async (id, data, user) => {
     return updatedOrder;
 };
 
-const getPerformanceReports = async () => {
+const getPerformanceReports = async (user = {}) => {
+    const { role, id: userId } = user;
+    const whereAgent = { role: { name: 'CALL_CENTER_AGENT' } };
+    let orderWhere = {};
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        whereAgent.createdById = adminId;
+        orderWhere = { seller: { adminId: adminId } };
+    } else {
+        whereAgent.id = -1;
+        orderWhere = { id: -1 };
+    }
+
     const agents = await prisma.user.findMany({
-        where: { role: { name: 'CALL_CENTER_AGENT' } },
+        where: whereAgent,
         include: {
             assignedOrders: {
                 select: {
@@ -462,11 +617,11 @@ const getPerformanceReports = async () => {
         const total = agent.assignedOrders.length;
         const completed = agent.assignedOrders.filter(o => ['COMPLETED', 'CONFIRMED', 'DELIVERED'].includes(o.status)).length;
         const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-        
+
         // Mocking rating and response time as they aren't fully in schema yet
         const customerRating = (Math.random() * (5.0 - 3.8) + 3.8).toFixed(1);
         const avgResponseTime = (Math.random() * (5.0 - 1.5) + 1.5).toFixed(1);
-        
+
         // Performance score calculation: Success Rate (70%) + Volume Weight (30%)
         const volumeScore = Math.min(total * 5, 30); // Max 30 points for volume (6+ orders)
         const perfScore = Math.round((successRate * 0.7) + volumeScore);
@@ -486,15 +641,15 @@ const getPerformanceReports = async () => {
 
     const totalAgents = agents.length;
     const activeAgents = agents.filter(a => a.isActive).length;
-    const avgPerf = agentMetrics.length > 0 
-        ? Math.round(agentMetrics.reduce((acc, m) => acc + m.perfRaw, 0) / agentMetrics.length) 
+    const avgPerf = agentMetrics.length > 0
+        ? Math.round(agentMetrics.reduce((acc, m) => acc + m.perfRaw, 0) / agentMetrics.length)
         : 0;
-    
-    const topPerformer = agentMetrics.length > 0 
-        ? [...agentMetrics].sort((a, b) => b.perfRaw - a.perfRaw)[0].name 
+
+    const topPerformer = agentMetrics.length > 0
+        ? [...agentMetrics].sort((a, b) => b.perfRaw - a.perfRaw)[0].name
         : 'N/A';
 
-    const totalOrders = await prisma.order.count();
+    const totalOrders = await prisma.order.count({ where: orderWhere });
 
     return {
         cards: {
@@ -513,30 +668,51 @@ const getPerformanceReports = async () => {
     };
 };
 
-const getOrderStatistics = async () => {
-    const totalOrders = await prisma.order.count();
+const getOrderStatistics = async (user = {}) => {
+    const { role, id: userId } = user;
+    let orderWhere = {};
+    let agentSearch = { role: { name: 'CALL_CENTER_AGENT' } };
+    const completedStatuses = ['COMPLETED', 'CONFIRMED', 'DELIVERED', 'SHIPPED'];
+    const adminId = await getAdminId(user);
+
+    if (adminId) {
+        orderWhere = { seller: { adminId: adminId } };
+        agentSearch.createdById = adminId;
+    } else {
+        orderWhere = { id: -1 };
+        agentSearch.id = -1;
+    }
+
+    const totalOrders = await prisma.order.count({ where: orderWhere });
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     const thisMonthOrders = await prisma.order.count({
-        where: { createdAt: { gte: firstDayOfMonth } }
+        where: {
+            createdAt: { gte: firstDayOfMonth },
+            ...orderWhere
+        }
     });
 
-    const completedStatuses = ['COMPLETED', 'CONFIRMED', 'DELIVERED'];
     const completedCount = await prisma.order.count({
-        where: { status: { in: completedStatuses } }
+        where: {
+            status: { in: completedStatuses },
+            ...orderWhere
+        }
     });
 
     const completionRate = totalOrders > 0 ? Math.round((completedCount / totalOrders) * 100) : 0;
 
     const avgValue = await prisma.order.aggregate({
-        _avg: { totalAmount: true }
+        _avg: { totalAmount: true },
+        where: orderWhere
     });
 
     const statusBreakdown = await prisma.order.groupBy({
         by: ['status'],
         _count: { id: true },
-        _sum: { totalAmount: true }
+        _sum: { totalAmount: true },
+        where: orderWhere
     });
 
     const formatStatusData = (statusStr) => {
@@ -544,7 +720,7 @@ const getOrderStatistics = async () => {
         const count = data?._count.id || 0;
         const revenue = data?._sum.totalAmount || 0;
         const percentage = totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0;
-        
+
         return {
             count,
             percentage: `${percentage}%`,
@@ -555,7 +731,7 @@ const getOrderStatistics = async () => {
 
     // Calculate Top Agents
     const topAgents = await prisma.user.findMany({
-        where: { role: { name: 'CALL_CENTER_AGENT' } },
+        where: agentSearch,
         include: {
             _count: {
                 select: { assignedOrders: true }
@@ -622,7 +798,7 @@ const getAgentStats = async (agentId) => {
     const postponedCount = await prisma.order.count({
         where: {
             callCenterAgentId: parseInt(agentId),
-            status: 'ON_HOLD' 
+            status: 'ON_HOLD'
         }
     });
 
@@ -688,8 +864,9 @@ const getAgentStats = async (agentId) => {
     };
 };
 
-const createAgent = async (agentData) => {
+const createAgent = async (agentData, user = {}) => {
     const { email, password, name, phone, status } = agentData;
+    const { role, id: userId } = user;
 
     // Find the CALL_CENTER_AGENT role
     const agentRole = await prisma.role.findUnique({
@@ -711,7 +888,8 @@ const createAgent = async (agentData) => {
             name,
             phone,
             isActive: status === 'Active',
-            roleId: agentRole.id
+            roleId: agentRole.id,
+            createdById: (role === 'ADMIN' || role === 'SUPER_ADMIN') ? userId : null
         }
     });
 
@@ -723,6 +901,7 @@ module.exports = {
     getCustomerById,
     getOrders,
     updateOrderStatus,
+    confirmOrder,
     addCallNote,
     getCallNotes,
     getAgents,

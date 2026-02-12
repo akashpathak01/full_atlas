@@ -6,6 +6,8 @@ const { verifyToken, authorizeRoles } = require('../../middleware/auth');
 // Super Admin can view all, Admin can manage their own
 router.get('/', verifyToken, authorizeRoles('SUPER_ADMIN', 'ADMIN'), sellersController.listSellers);
 router.post('/', verifyToken, authorizeRoles('SUPER_ADMIN', 'ADMIN'), sellersController.onboardSeller);
+router.get('/:sellerId', verifyToken, authorizeRoles('SUPER_ADMIN', 'ADMIN'), sellersController.getSeller);
+router.delete('/:sellerId', verifyToken, authorizeRoles('SUPER_ADMIN', 'ADMIN'), sellersController.deleteSeller);
 
 // Seller's own dashboard (without sellerId param) - MUST BE FIRST to avoid collision
 router.get('/dashboard/stats', verifyToken, authorizeRoles('SELLER'), sellersController.getDashboardStats);

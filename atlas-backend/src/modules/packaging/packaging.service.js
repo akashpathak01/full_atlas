@@ -41,6 +41,12 @@ const listTasks = async (user) => {
     let where = {};
     if (role === 'PACKAGING_AGENT') {
         where = { agentId: userId };
+    } else if (role === 'ADMIN') {
+        where = {
+            order: {
+                seller: { adminId: userId }
+            }
+        };
     }
 
     return await prisma.packagingTask.findMany({
@@ -65,7 +71,7 @@ const completeTask = async (taskId, agentId, user, data = {}) => {
         // 1. Mark task as completed
         const updatedTask = await tx.packagingTask.update({
             where: { id: parseInt(taskId) },
-            data: { 
+            data: {
                 completedAt: new Date(),
                 weight: data.weight ? parseFloat(data.weight) : undefined,
                 qualityCheck: data.qualityCheck || undefined,
@@ -87,7 +93,7 @@ const completeTask = async (taskId, agentId, user, data = {}) => {
         entityType: 'ORDER',
         entityId: task.orderId,
         user,
-        metadata: { 
+        metadata: {
             taskId: updatedTask.id,
             weight: updatedTask.weight,
             qualityCheck: updatedTask.qualityCheck
@@ -99,19 +105,17 @@ const completeTask = async (taskId, agentId, user, data = {}) => {
 
 const getReports = async (user, period = 'today') => {
     const { role, id: userId } = user;
-    
+
     // Scoping
-    let agentScope = {};
+    let taskScope = {};
     if (role === 'PACKAGING_AGENT') {
-        const agent = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { createdById: true }
-        });
-        if (agent?.createdById) {
-            agentScope = { agent: { createdById: agent.createdById } };
-        }
+        taskScope = { agentId: userId };
     } else if (role === 'ADMIN') {
-        agentScope = { agent: { createdById: userId } };
+        taskScope = {
+            order: {
+                seller: { adminId: userId }
+            }
+        };
     }
 
     // Date filtering
@@ -128,7 +132,7 @@ const getReports = async (user, period = 'today') => {
     const tasks = await prisma.packagingTask.findMany({
         where: {
             completedAt: { gte: startDate },
-            ...(role === 'PACKAGING_AGENT' ? { agentId: userId } : agentScope)
+            ...taskScope
         },
         orderBy: { completedAt: 'asc' }
     });
@@ -138,7 +142,7 @@ const getReports = async (user, period = 'today') => {
     const passed = tasks.filter(t => t.qualityCheck === 'PASSED').length;
     const conditional = tasks.filter(t => t.qualityCheck === 'CONDITIONAL').length;
     const failed = tasks.filter(t => t.qualityCheck === 'FAILED').length;
-    
+
     const passRate = qualityChecks > 0 ? ((passed / qualityChecks) * 100).toFixed(1) : 0;
 
     // Avg Duration calculation
@@ -205,39 +209,46 @@ const getReports = async (user, period = 'today') => {
 
 const getDashboardStats = async (user) => {
     const { role, id: userId } = user;
-    
-    // Scoping for Packaging Agent
-    let agentScope = {};
+
+    let orderScope = {};
+    let taskScope = {};
+
     if (role === 'PACKAGING_AGENT') {
         const agent = await prisma.user.findUnique({
             where: { id: userId },
             select: { createdById: true }
         });
-        
+
         if (agent?.createdById) {
-            agentScope = { 
-                seller: { adminId: agent.createdById } 
+            orderScope = {
+                seller: { adminId: agent.createdById }
             };
+            taskScope = { agentId: userId };
         }
     } else if (role === 'ADMIN') {
-        agentScope = {
+        orderScope = {
             seller: { adminId: userId }
+        };
+        taskScope = {
+            order: {
+                seller: { adminId: userId }
+            }
         };
     }
 
-    // 1. Pending Packaging (Orders Confirmed but not yet assigned/in packaging)
+    // 1. Pending Packaging
     const pendingCount = await prisma.order.count({
         where: {
             status: 'CONFIRMED',
-            ...agentScope
+            ...orderScope
         }
     });
 
-    // 2. In Progress (Orders currently being packed)
+    // 2. In Progress
     const inProgressCount = await prisma.order.count({
         where: {
             status: 'IN_PACKAGING',
-            ...agentScope
+            ...orderScope
         }
     });
 
@@ -248,21 +259,22 @@ const getDashboardStats = async (user) => {
     const completedTodayCount = await prisma.packagingTask.count({
         where: {
             completedAt: { gte: startOfDay },
-            ...(role === 'PACKAGING_AGENT' ? { agentId: userId } : {})
+            ...taskScope
         }
     });
 
-    // 4. Total Records (All completed packaging tasks)
+    // 4. Total Records
     const totalRecords = await prisma.packagingTask.count({
         where: {
-            ...(role === 'PACKAGING_AGENT' ? { agentId: userId } : {})
+            ...taskScope
         }
     });
 
-    // 5. Recent Packaging Tasks
+    // 5. Recent Packaging Tasks (Show only completed/packed tasks)
     const recentPackaging = await prisma.packagingTask.findMany({
         where: {
-            ...(role === 'PACKAGING_AGENT' ? { agentId: userId } : {})
+            completedAt: { not: null },
+            ...taskScope
         },
         take: 5,
         orderBy: { completedAt: 'desc' },
@@ -281,9 +293,9 @@ const getDashboardStats = async (user) => {
 
     // 6. Confirmed Orders (Ready for packaging)
     const confirmedOrders = await prisma.order.findMany({
-        where: { 
+        where: {
             status: 'CONFIRMED',
-            ...agentScope
+            ...orderScope
         },
         take: 5,
         orderBy: { createdAt: 'desc' },
@@ -314,9 +326,43 @@ const getDashboardStats = async (user) => {
     };
 };
 
+const getMaterialsStats = async (user) => {
+    const { role, id: userId } = user;
+    let where = {};
+
+    if (role === 'PACKAGING_AGENT') {
+        const agent = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { createdById: true }
+        });
+        where = { adminId: agent?.createdById || null };
+    } else if (role === 'ADMIN') {
+        where = { adminId: userId };
+    }
+
+    // 1. Initial counts
+    const totalMaterials = await prisma.packagingMaterial.count({ where });
+
+    // 2. Fetch all materials to calculate kompleks stats (Prisma doesn't support col-to-col comparison easily)
+    const materials = await prisma.packagingMaterial.findMany({ where });
+
+    const lowStockItems = materials.filter(m => m.stock <= (m.minLevel || 0));
+    const outOfStockItems = materials.filter(m => m.stock === 0);
+    const totalValue = materials.reduce((acc, m) => acc + (m.stock * m.cost), 0);
+
+    return {
+        totalMaterials,
+        lowStockCount: lowStockItems.length,
+        outOfStockCount: outOfStockItems.length,
+        totalValue,
+        lowStockItems: lowStockItems.slice(0, 5),
+        outOfStockItems: outOfStockItems.slice(0, 5)
+    };
+};
+
 const listMaterials = async (user) => {
     const { role, id: userId } = user;
-    
+
     let where = {};
     if (role === 'PACKAGING_AGENT') {
         const agent = await prisma.user.findUnique({
@@ -336,7 +382,7 @@ const listMaterials = async (user) => {
 
 const createMaterial = async (data, user) => {
     const { role, id: userId } = user;
-    
+
     let adminId = userId;
     if (role === 'PACKAGING_AGENT') {
         const agent = await prisma.user.findUnique({
@@ -383,6 +429,7 @@ module.exports = {
     listTasks,
     completeTask,
     getDashboardStats,
+    getMaterialsStats,
     listMaterials,
     createMaterial,
     updateMaterial,

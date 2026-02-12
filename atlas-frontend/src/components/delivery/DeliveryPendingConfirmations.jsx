@@ -1,7 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ScanLine, Clock, Search, RotateCcw } from 'lucide-react';
+import api from '../../lib/api';
 
 export function DeliveryPendingConfirmations({ onNavigate }) {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchOrders = async () => {
+            try {
+                const response = await api.get('/delivery/orders/pending-confirmations');
+                setOrders(response.data);
+            } catch (error) {
+                console.error('Error fetching pending confirmations:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchOrders();
+    }, []);
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -43,7 +60,7 @@ export function DeliveryPendingConfirmations({ onNavigate }) {
                     <Clock className="w-5 h-5 text-orange-600" />
                     <span className="font-semibold text-gray-600">Pending Confirmations</span>
                 </div>
-                <h2 className="text-3xl font-bold text-orange-600">0</h2>
+                <h2 className="text-3xl font-bold text-orange-600">{orders.length}</h2>
             </div>
 
             {/* Filters */}
@@ -79,15 +96,46 @@ export function DeliveryPendingConfirmations({ onNavigate }) {
             {/* Pending List */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
-                    <h3 className="font-bold text-gray-900">Pending Confirmations</h3>
+                    <h3 className="font-bold text-gray-900">Pending Confirmations ({orders.length})</h3>
                 </div>
-                <div className="p-12 text-center flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                        <CheckCircle className="w-8 h-8 text-gray-300" />
+                {loading ? (
+                    <div className="p-12 text-center text-gray-500">Loading...</div>
+                ) : orders.length === 0 ? (
+                    <div className="p-12 text-center flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                            <CheckCircle className="w-8 h-8 text-gray-300" />
+                        </div>
+                        <h3 className="text-gray-900 font-medium mb-1">No pending confirmations</h3>
+                        <p className="text-gray-500 text-sm">All deliveries have been confirmed or there are no deliveries pending confirmation.</p>
                     </div>
-                    <h3 className="text-gray-900 font-medium mb-1">No pending confirmations</h3>
-                    <p className="text-gray-500 text-sm">All deliveries have been confirmed or there are no deliveries pending confirmation.</p>
-                </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-orange-100 text-gray-800 text-xs uppercase font-bold">
+                                <tr>
+                                    <th className="px-4 py-3">Order Code</th>
+                                    <th className="px-4 py-3">Customer</th>
+                                    <th className="px-4 py-3">Phone</th>
+                                    <th className="px-4 py-3">Agent</th>
+                                    <th className="px-4 py-3">Address</th>
+                                    <th className="px-4 py-3">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {orders.map((order) => (
+                                    <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-medium text-blue-600">{order.orderNumber}</td>
+                                        <td className="px-4 py-3">{order.customerName}</td>
+                                        <td className="px-4 py-3">{order.customerPhone}</td>
+                                        <td className="px-4 py-3">{order.deliveryTask?.agent?.name || 'Unassigned'}</td>
+                                        <td className="px-4 py-3 text-xs">{order.shippingAddress?.substring(0, 40)}...</td>
+                                        <td className="px-4 py-3 text-xs">{new Date(order.createdAt).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </div>
     );

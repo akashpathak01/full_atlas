@@ -69,11 +69,41 @@ const getDeliveryStats = async (req, res) => {
     }
 };
 
+const getAllOrders = async (req, res) => {
+    try {
+        const orders = await deliveryService.getAllOrders(req.user);
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching all orders', error: error.message });
+    }
+};
+
+const getPendingConfirmations = async (req, res) => {
+    try {
+        const orders = await deliveryService.getPendingConfirmations(req.user);
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching pending confirmations', error: error.message });
+    }
+};
+
+const getReturnedOrders = async (req, res) => {
+    try {
+        const orders = await deliveryService.getReturnedOrders(req.user);
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching returned orders', error: error.message });
+    }
+};
+
 module.exports = {
     assignOrder,
     listTasks,
     startDelivery,
     completeDelivery,
     getDeliveryOrders,
-    getDeliveryStats
+    getDeliveryStats,
+    getAllOrders,
+    getPendingConfirmations,
+    getReturnedOrders
 };

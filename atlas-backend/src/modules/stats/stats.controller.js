@@ -3,7 +3,7 @@ const prisma = require('../../utils/prisma');
 
 const getAdminStats = async (req, res) => {
     try {
-        const stats = await statsService.getAdminStats();
+        const stats = await statsService.getAdminStats(req.user);
         res.json(stats);
     } catch (error) {
         console.error("Error in getAdminStats:", error);

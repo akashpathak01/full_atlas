@@ -20,7 +20,10 @@ import {
     Lock,
     Upload,
     ArrowRight,
-    Settings
+    Settings,
+    Pencil,
+    Trash2,
+    X
 } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { cn } from '../../lib/utils';
@@ -59,12 +62,14 @@ const colorMap = {
 
 export function AdminUsersPage() {
     const navigate = useNavigate();
-    const [view, setView] = useState('list'); // 'list' or 'create'
+    const [view, setView] = useState('list'); // 'list', 'create', 'edit'
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('All Roles');
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeSearch, setActiveSearch] = useState({ term: '', role: 'All Roles' });
+    const [editingUser, setEditingUser] = useState(null);
+    const [viewingUser, setViewingUser] = useState(null);
 
     useEffect(() => {
         fetchUsers();
@@ -110,17 +115,67 @@ export function AdminUsersPage() {
 
     const handleCreateUser = async (newUser) => {
         try {
-            // Map role name back to uppercase if needed for backend
-            const backendRoleName = Object.keys(roleDisplayMap).find(key => roleDisplayMap[key] === newUser.role) || newUser.role;
             await api.post('/users', {
                 ...newUser,
-                roleName: backendRoleName
+                roleName: newUser.role // Already in uppercase from UserForm
             });
             fetchUsers();
             setView('list');
         } catch (error) {
             console.error('Failed to create user:', error);
             alert(error.response?.data?.message || 'Failed to create user');
+        }
+    };
+
+    const handleEditUser = (user) => {
+        setEditingUser(user);
+        setView('edit');
+    };
+
+    const handleUpdateUser = async (updatedData) => {
+        try {
+            // Map display role back to backend role name
+            const reverseRoleMap = Object.entries(roleDisplayMap).reduce((acc, [key, value]) => {
+                acc[value] = key;
+                return acc;
+            }, {});
+
+            const roleName = reverseRoleMap[updatedData.role] || updatedData.role;
+
+            await api.patch(`/users/${editingUser.id}`, {
+                ...updatedData,
+                roleName
+            });
+            fetchUsers();
+            setEditingUser(null);
+            setView('list');
+        } catch (error) {
+            console.error('Failed to update user:', error);
+            alert(error.response?.data?.message || 'Failed to update user');
+        }
+    };
+
+    const handleDeleteUser = async (userId, userName) => {
+        if (!window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await api.delete(`/users/${userId}`);
+            setUsers(users.filter(u => u.id !== userId));
+        } catch (error) {
+            console.error('Failed to delete user:', error);
+            alert(error.response?.data?.message || 'Failed to delete user');
+        }
+    };
+
+    const handleViewUser = async (userId) => {
+        try {
+            const response = await api.get(`/users/${userId}`);
+            setViewingUser(response.data);
+        } catch (error) {
+            console.error('Failed to fetch user details:', error);
+            alert('Failed to fetch user details');
         }
     };
 
@@ -143,6 +198,21 @@ export function AdminUsersPage() {
                     currentUserRole={currentUser?.role}
                     title="Add System User"
                     subtitle="Create new staff account with specific permissions"
+                />
+            </div>
+        );
+    }
+
+    if (view === 'edit' && editingUser) {
+        return (
+            <div className="max-w-4xl mx-auto">
+                <UserForm
+                    onBack={() => { setView('list'); setEditingUser(null); }}
+                    onSubmit={handleUpdateUser}
+                    initialData={editingUser}
+                    currentUserRole={currentUser?.role}
+                    title="Edit System User"
+                    subtitle={`Updating details for ${editingUser.name}`}
                 />
             </div>
         );
@@ -287,12 +357,29 @@ export function AdminUsersPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <button
-                                            onClick={() => alert(`Viewing details for ${u.name}`)}
-                                            className="p-2 transition-all text-white bg-blue-500 hover:bg-blue-600 rounded-lg shadow-sm active:scale-90"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center space-x-2">
+                                            <button
+                                                onClick={() => handleViewUser(u.id)}
+                                                className="p-2 transition-all text-white bg-blue-500 hover:bg-blue-600 rounded-lg shadow-sm active:scale-90"
+                                                title="View Details"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleEditUser(u)}
+                                                className="p-2 transition-all text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg shadow-sm active:scale-90"
+                                                title="Edit User"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteUser(u.id, u.name)}
+                                                className="p-2 transition-all text-white bg-rose-500 hover:bg-rose-600 rounded-lg shadow-sm active:scale-90"
+                                                title="Delete User"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -300,6 +387,55 @@ export function AdminUsersPage() {
                     </table>
                 </div>
             </Card>
+            {/* View User Modal */}
+            {viewingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-2xl bg-white shadow-2xl overflow-hidden border-0">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-orange-600 text-white">
+                            <h2 className="text-xl font-bold">User Details</h2>
+                            <button onClick={() => setViewingUser(null)} className="p-1 hover:bg-white/20 rounded-lg transition-colors">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <CardContent className="p-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <DetailItem label="Full Name" value={viewingUser.name} icon={<User className="w-4 h-4 text-orange-500" />} />
+                                    <DetailItem label="Email Address" value={viewingUser.email} icon={<Mail className="w-4 h-4 text-blue-500" />} />
+                                    <DetailItem label="Phone Number" value={viewingUser.phone || 'N/A'} icon={<Phone className="w-4 h-4 text-emerald-500" />} />
+                                    <DetailItem label="Role" value={roleDisplayMap[viewingUser.role?.name] || viewingUser.role?.name} icon={<Shield className="w-4 h-4 text-orange-500" />} />
+                                </div>
+                                <div className="space-y-6">
+                                    <DetailItem label="Status" value={viewingUser.isActive ? 'Active' : 'Inactive'} icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} />
+                                    <DetailItem label="Joined Date" value={new Date(viewingUser.createdAt).toLocaleDateString()} icon={<Clock className="w-4 h-4 text-gray-400" />} />
+                                    <DetailItem label="Shop Name" value={viewingUser.seller?.shopName || 'N/A'} icon={<Store className="w-4 h-4 text-orange-500" />} />
+                                    <DetailItem label="Bank Account" value={viewingUser.accountNumber || 'N/A'} icon={<CreditCard className="w-4 h-4 text-blue-500" />} />
+                                </div>
+                            </div>
+                            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+                                <button
+                                    onClick={() => setViewingUser(null)}
+                                    className="px-8 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all"
+                                >
+                                    Close Details
+                                </button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function DetailItem({ label, value, icon }) {
+    return (
+        <div className="space-y-1.5 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+            <div className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {icon}
+                <span className="ml-2">{label}</span>
+            </div>
+            <div className="text-sm font-bold text-gray-900 ml-6">{value}</div>
         </div>
     );
 }

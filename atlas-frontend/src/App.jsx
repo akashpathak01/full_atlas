@@ -12,6 +12,7 @@ import { AdminOrdersPage } from './pages/admin/AdminOrdersPage';
 import { AdminProductsPage } from './pages/admin/AdminProductsPage';
 import { AdminInventoryPage } from './pages/admin/AdminInventoryPage';
 import { AdminAddProductPage } from './pages/admin/AdminAddProductPage';
+import { AdminEditProductPage } from './pages/admin/AdminEditProductPage';
 import { AdminWarehousesPage } from './pages/admin/AdminWarehousesPage';
 import { AdminAddWarehousePage } from './pages/admin/AdminAddWarehousePage';
 
@@ -169,6 +170,11 @@ function App() {
             <Route path="/admin/products/add" element={
               <MainLayout>
                 <AdminAddProductPage />
+              </MainLayout>
+            } />
+            <Route path="/admin/products/edit/:id" element={
+              <MainLayout>
+                <AdminEditProductPage />
               </MainLayout>
             } />
 

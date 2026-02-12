@@ -18,7 +18,10 @@ import {
     Store,
     ArrowRight,
     Settings,
-    Briefcase
+    Briefcase,
+    Pencil,
+    Trash2,
+    X
 } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { cn } from '../../lib/utils';
@@ -29,11 +32,13 @@ import { useAuth } from '../../context/AuthContext';
 
 export function AdminSellersPage() {
     const navigate = useNavigate();
-    const [view, setView] = useState('list'); // 'list' or 'create'
+    const [view, setView] = useState('list'); // 'list', 'create', 'edit'
     const [searchTerm, setSearchTerm] = useState('');
     const [sellers, setSellers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeSearch, setActiveSearch] = useState('');
+    const [editingSeller, setEditingSeller] = useState(null);
+    const [viewingSeller, setViewingSeller] = useState(null);
 
     useEffect(() => {
         fetchSellers();
@@ -84,6 +89,62 @@ export function AdminSellersPage() {
         }
     };
 
+    const handleEditSeller = async (seller) => {
+        try {
+            // Fetch full details including user info
+            const response = await api.get(`/sellers/${seller.id}`);
+            const fullSeller = response.data;
+            setEditingSeller({
+                ...fullSeller,
+                role: 'SELLER' // Ensure role is set for UserForm
+            });
+            setView('edit');
+        } catch (error) {
+            console.error('Failed to fetch seller details for editing:', error);
+            alert('Failed to fetch seller details');
+        }
+    };
+
+    const handleUpdateSeller = async (updatedData) => {
+        try {
+            // Updated user part via User API
+            await api.patch(`/users/${editingSeller.userId}`, {
+                ...updatedData,
+                roleName: 'SELLER'
+            });
+            fetchSellers();
+            setEditingSeller(null);
+            setView('list');
+        } catch (error) {
+            console.error('Failed to update seller:', error);
+            alert(error.response?.data?.message || 'Failed to update seller');
+        }
+    };
+
+    const handleDeleteSeller = async (sellerId, shopName) => {
+        if (!window.confirm(`Are you sure you want to delete seller "${shopName}"? All their products and data will be affected.`)) {
+            return;
+        }
+
+        try {
+            await api.delete(`/sellers/${sellerId}`);
+            setSellers(sellers.filter(s => s.id !== sellerId));
+        } catch (error) {
+            console.error('Failed to delete seller:', error);
+            alert(error.response?.data?.message || 'Failed to delete seller');
+        }
+    };
+
+    const handleViewSeller = async (sellerId) => {
+        try {
+            const response = await api.get(`/sellers/${sellerId}`);
+            setViewingSeller(response.data);
+        } catch (error) {
+            console.error('Failed to fetch seller details:', error);
+            alert('Failed to fetch seller details');
+        }
+    };
+
     const { user: currentUser } = useAuth();
 
     if (isLoading && sellers.length === 0) {
@@ -103,6 +164,21 @@ export function AdminSellersPage() {
                     currentUserRole={currentUser?.role}
                     title="Onboard New Seller"
                     subtitle="Register a new merchant to the platform"
+                />
+            </div>
+        );
+    }
+
+    if (view === 'edit' && editingSeller) {
+        return (
+            <div className="max-w-4xl mx-auto">
+                <UserForm
+                    onBack={() => { setView('list'); setEditingSeller(null); }}
+                    onSubmit={handleUpdateSeller}
+                    initialData={editingSeller.user ? { ...editingSeller.user, shopName: editingSeller.shopName } : editingSeller}
+                    currentUserRole={currentUser?.role}
+                    title="Edit Seller Details"
+                    subtitle={`Updating account for ${editingSeller.shopName || editingSeller.user?.name}`}
                 />
             </div>
         );
@@ -241,23 +317,28 @@ export function AdminSellersPage() {
                                             {s.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end space-x-2">
                                             <button
-                                                onClick={() => alert(`Viewing details for ${s.name}`)}
-                                                className="p-2.5 transition-all text-white bg-blue-500 hover:bg-blue-600 rounded-xl shadow-lg shadow-blue-100 active:scale-90"
+                                                onClick={() => handleViewSeller(s.id)}
+                                                className="p-2 transition-all text-white bg-blue-500 hover:bg-blue-600 rounded-xl shadow-lg shadow-blue-100 active:scale-90"
+                                                title="View Details"
                                             >
                                                 <Eye className="w-4 h-4" />
                                             </button>
                                             <button
-                                                className="p-2.5 transition-all text-white bg-slate-800 hover:bg-black rounded-xl shadow-lg shadow-gray-100 active:scale-90"
+                                                onClick={() => handleEditSeller(s)}
+                                                className="p-2 transition-all text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl shadow-lg shadow-emerald-100 active:scale-90"
+                                                title="Edit Seller"
                                             >
-                                                <Briefcase className="w-4 h-4" />
+                                                <Pencil className="w-4 h-4" />
                                             </button>
                                             <button
-                                                className="p-2.5 transition-all text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-lg shadow-orange-100 active:scale-90"
+                                                onClick={() => handleDeleteSeller(s.id, s.name)}
+                                                className="p-2 transition-all text-white bg-rose-500 hover:bg-rose-600 rounded-xl shadow-lg shadow-rose-100 active:scale-90"
+                                                title="Delete Seller"
                                             >
-                                                <Settings className="w-4 h-4" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </td>
@@ -267,6 +348,78 @@ export function AdminSellersPage() {
                     </table>
                 </div>
             </Card>
+            {/* View Seller Modal */}
+            {viewingSeller && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-2xl bg-white shadow-2xl overflow-hidden border-0">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-orange-600 text-white">
+                            <h2 className="text-xl font-bold">Seller Details</h2>
+                            <button onClick={() => setViewingSeller(null)} className="p-1 hover:bg-white/20 rounded-lg transition-colors">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <CardContent className="p-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <DetailItem label="Full Name" value={viewingSeller.user?.name} icon={<User className="w-4 h-4 text-orange-500" />} />
+                                    <DetailItem label="Shop Name" value={viewingSeller.shopName} icon={<Store className="w-4 h-4 text-blue-500" />} />
+                                    <DetailItem label="Email Address" value={viewingSeller.user?.email} icon={<Mail className="w-4 h-4 text-emerald-500" />} />
+                                    <DetailItem label="Phone Number" value={viewingSeller.user?.phone || 'N/A'} icon={<Phone className="w-4 h-4 text-orange-500" />} />
+                                </div>
+                                <div className="space-y-6">
+                                    <DetailItem label="Status" value={viewingSeller.user?.isActive ? 'Active' : 'Inactive'} icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} />
+                                    <DetailItem label="Joined Date" value={new Date(viewingSeller.createdAt).toLocaleDateString()} icon={<Clock className="w-4 h-4 text-gray-400" />} />
+                                    <DetailItem label="Products" value={viewingSeller._count?.products || 0} icon={<Briefcase className="w-4 h-4 text-orange-500" />} />
+                                    <DetailItem label="Total Orders" value={viewingSeller._count?.orders || 0} icon={<FileText className="w-4 h-4 text-blue-500" />} />
+                                </div>
+                            </div>
+                            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+                                <button
+                                    onClick={() => setViewingSeller(null)}
+                                    className="px-8 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all"
+                                >
+                                    Close Details
+                                </button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div >
+    );
+}
+
+function DetailItem({ label, value, icon }) {
+    return (
+        <div className="space-y-1.5 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+            <div className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {icon}
+                <span className="ml-2">{label}</span>
+            </div>
+            <div className="text-sm font-bold text-gray-900 ml-6">{value}</div>
+        </div>
+    );
+}
+
+function FileText({ className }) {
+    return (
+        <svg
+            className={className}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <line x1="10" y1="9" x2="8" y2="9" />
+        </svg>
     );
 }

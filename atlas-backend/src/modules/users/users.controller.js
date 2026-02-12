@@ -38,8 +38,44 @@ const updateStatus = async (req, res) => {
     }
 };
 
+const getUser = async (req, res) => {
+    try {
+        const user = await userService.getUserById(req.params.id, req.user);
+        res.json(user);
+    } catch (error) {
+        const status = error.message.includes('Forbidden') ? 403 :
+            error.message.includes('not found') ? 404 : 400;
+        res.status(status).json({ message: error.message });
+    }
+};
+
+const updateUser = async (req, res) => {
+    try {
+        const user = await userService.updateUser(req.params.id, req.body, req.user);
+        res.json(user);
+    } catch (error) {
+        const status = error.message.includes('Forbidden') ? 403 :
+            error.message.includes('not found') ? 404 : 400;
+        res.status(status).json({ message: error.message });
+    }
+};
+
+const deleteUser = async (req, res) => {
+    try {
+        const result = await userService.deleteUser(req.params.id, req.user);
+        res.json(result);
+    } catch (error) {
+        const status = error.message.includes('Forbidden') ? 403 :
+            error.message.includes('not found') ? 404 : 400;
+        res.status(status).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createUser,
     listUsers,
-    updateStatus
+    updateStatus,
+    getUser,
+    updateUser,
+    deleteUser
 };

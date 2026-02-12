@@ -58,13 +58,13 @@ const onboardSeller = async (data, requester) => {
     const { role: requesterRole, id: requesterId } = requester;
 
     const actualRole = await prisma.role.findFirst({
-        where: { name: { in: ['SELLER', 'Seller'] } }
+        where: { name: 'SELLER' }
     });
 
     if (!actualRole) throw new Error('Seller role not found in system');
 
     const result = await prisma.$transaction(async (tx) => {
-        const bcrypt = require('bcrypt');
+        const bcrypt = require('bcryptjs');
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await tx.user.create({
@@ -138,8 +138,8 @@ const getDashboardStats = async (sellerId) => {
     const lastMonthRevenue = lastMonthOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
     // Calculate revenue percentage change
-    const revenueChange = lastMonthRevenue > 0 
-        ? ((currentRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
+    const revenueChange = lastMonthRevenue > 0
+        ? ((currentRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
         : 0;
 
     // Get current week products count
@@ -164,8 +164,8 @@ const getDashboardStats = async (sellerId) => {
     });
 
     // Calculate products percentage change
-    const productsChange = lastWeekProducts > 0 
-        ? ((currentWeekProducts - lastWeekProducts) / lastWeekProducts) * 100 
+    const productsChange = lastWeekProducts > 0
+        ? ((currentWeekProducts - lastWeekProducts) / lastWeekProducts) * 100
         : 0;
 
     // Get current week orders count
@@ -190,8 +190,8 @@ const getDashboardStats = async (sellerId) => {
     });
 
     // Calculate orders percentage change
-    const ordersChange = lastWeekOrders > 0 
-        ? ((currentWeekOrders - lastWeekOrders) / lastWeekOrders) * 100 
+    const ordersChange = lastWeekOrders > 0
+        ? ((currentWeekOrders - lastWeekOrders) / lastWeekOrders) * 100
         : 0;
 
     // Get out of stock items
@@ -390,6 +390,52 @@ const getSellerIdByUserId = async (userId) => {
     return seller ? seller.id : null;
 };
 
+const getSellerDetails = async (sellerId, requester) => {
+    const seller = await prisma.seller.findUnique({
+        where: { id: parseInt(sellerId) },
+        include: {
+            user: true,
+            _count: {
+                select: { products: true, orders: true }
+            }
+        }
+    });
+
+    if (!seller) throw new Error('Seller not found');
+
+    // Admin boundary
+    if (requester.role === 'ADMIN' && seller.adminId !== requester.id) {
+        throw new Error('Forbidden: You do not manage this seller');
+    }
+
+    return seller;
+};
+
+const deleteSeller = async (sellerId, requester) => {
+    const seller = await prisma.seller.findUnique({
+        where: { id: parseInt(sellerId) },
+        include: { user: true }
+    });
+
+    if (!seller) throw new Error('Seller not found');
+
+    // Admin boundary
+    if (requester.role === 'ADMIN' && seller.adminId !== requester.id) {
+        throw new Error('Forbidden: You do not have permission to delete this seller');
+    }
+
+    // Deleting the user will cascade if set up, or we do it manually.
+    // Based on my users.service.js implementation, I'll just use prisma here directly for simplicity.
+    await prisma.$transaction([
+        prisma.product.deleteMany({ where: { sellerId: seller.id } }),
+        prisma.order.deleteMany({ where: { sellerId: seller.id } }),
+        prisma.seller.delete({ where: { id: seller.id } }),
+        prisma.user.delete({ where: { id: seller.userId } })
+    ]);
+
+    return { message: 'Seller deleted successfully' };
+};
+
 module.exports = {
     listSellers,
     onboardSeller,
@@ -398,6 +444,8 @@ module.exports = {
     getTopProducts,
     getRecentOrders,
     getLowStockAlerts,
-    getSellerIdByUserId
+    getSellerIdByUserId,
+    getSellerDetails,
+    deleteSeller
 };
 
