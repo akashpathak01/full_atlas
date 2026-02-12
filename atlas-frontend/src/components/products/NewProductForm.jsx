@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-    ArrowLeft, Home, Info, Plus, Image as ImageIcon,
-    X, Save, HelpCircle
-} from 'lucide-react';
+import { ArrowLeft, Home, Info, Plus, Image as ImageIcon, X, Save, HelpCircle } from 'lucide-react';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export function NewProductForm({ onBack, onSubmit, initialData = null }) {
-    const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || '{}'));
+    const { user } = useAuth();
     const [sellers, setSellers] = useState([]);
     const isEditing = !!initialData;
     const [formData, setFormData] = useState({
@@ -27,7 +25,7 @@ export function NewProductForm({ onBack, onSubmit, initialData = null }) {
     });
 
     useEffect(() => {
-        if (['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        if (['Admin', 'Super Admin'].includes(user?.role)) {
             const fetchSellers = async () => {
                 try {
                     const response = await api.get('/sellers');
@@ -200,7 +198,7 @@ export function NewProductForm({ onBack, onSubmit, initialData = null }) {
 
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
+                            {['Admin', 'Super Admin'].includes(user?.role) && (
                                 <div className="space-y-1.5 md:col-span-2">
                                     <label className="text-sm font-bold text-gray-700">Assign to Seller <span className="text-[#E15B2D]">*</span></label>
                                     <select
